@@ -64,7 +64,16 @@
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;"><button onclick="discoverPOIs()" class="btn btn-secondary" style="flex:1; min-width: 140px;">✨ AI Discover</button><button onclick="addPOIPrompt()" class="btn btn-secondary" style="flex:1; min-width: 140px;">➕ Add Manual</button><button onclick="openImport('pois')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📥 Import Cache</button><button onclick="exportData('pois')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📤 Export/View</button></div><button onclick="clearCategory('pois')" class="btn btn-secondary btn-danger">🗑️ Clear All POIs</button>
     </div>
 
-    <div id="sub-styles" style="display: none;"><div class="section-title">Visual Styles</div><div class="group" id="style-list"></div><button onclick="addStylePrompt()" class="btn btn-secondary">➕ Add Style</button></div>
+    <div id="sub-styles" style="display: none;">
+        <div class="section-title">Visual Styles</div>
+        <div class="group" id="style-list"></div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+            <button onclick="addStylePrompt()" class="btn btn-secondary" style="flex:1; min-width: 140px;">➕ Add Style</button>
+            <button onclick="openImport('styles')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📥 Import</button>
+            <button onclick="exportData('styles')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📤 Export/View</button>
+        </div>
+        <button onclick="clearCategory('styles')" class="btn btn-secondary btn-danger">🗑️ Clear All Styles</button>
+    </div>
 
     <div id="sub-prompts-data" style="display: none;">
         <div class="section-title">Prompt Management</div>

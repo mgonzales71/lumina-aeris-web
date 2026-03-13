@@ -57,8 +57,8 @@ function openImport(type) {
 function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
 
 /**
- * FIXED confirmImport:
- * Handles malformed JSON, trailing commas, and "smart" quotes.
+ * SUPER FIXED confirmImport:
+ * Aggressively cleans input to handle messy AI-generated JSON.
  */
 function confirmImport() {
     let raw = document.getElementById('import-text').value;
@@ -71,21 +71,35 @@ function confirmImport() {
         let end = raw.lastIndexOf('}'); 
         if (end === -1 || (raw.lastIndexOf(']') !== -1 && raw.lastIndexOf(']') > end)) end = raw.lastIndexOf(']');
         
-        if (start === -1 || end === -1) throw new Error("Could not find JSON data in paste.");
+        if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
         // 2. Extract and sanitize
         let cleaned = raw.substring(start, end + 1);
         
-        // Replace smart quotes and hidden characters
-        cleaned = cleaned.replace(/[\u201C\u201D]/g, '"')
-                         .replace(/[\u2018\u2019]/g, "'")
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "");
+        // Replace smart quotes, hidden characters, and normalized whitespace
+        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Double smart quotes
+                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Single smart quotes
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Zero-width spaces
+                         .replace(/\r\n/g, "\n"); 
             
         // 3. Fix trailing commas (JSON.parse doesn't allow them)
-        // This regex looks for a comma followed by closing brace/bracket
-        cleaned = cleaned.replace(/,[\s\r\n]*([\]\}])/g, '$1');
+        // Aggressive regex for trailing commas in objects and arrays
+        cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
         
-        const parsed = JSON.parse(cleaned);
+        // 4. Final attempt at cleaning: ensure internal strings don't have unescaped newlines
+        // Note: This is complex, but often AI output contains raw newlines in descriptions.
+        // We'll try to parse first, then fallback to newline-fixing if it fails.
+        let parsed;
+        try {
+            parsed = JSON.parse(cleaned);
+        } catch (initialError) {
+            // Fallback: Escape raw newlines inside strings
+            // This is a naive regex but often helps
+            cleaned = cleaned.replace(/: "([\s\S]*?)"/g, (match, p1) => {
+                return ': "' + p1.replace(/\n/g, "\\n") + '"';
+            });
+            parsed = JSON.parse(cleaned);
+        }
         
         if (state.importType === 'themes') { 
             if (!Array.isArray(parsed)) throw new Error("Themes must be an array.");
@@ -93,9 +107,14 @@ function confirmImport() {
             renderThemes(); 
         }
         else if (state.importType === 'pois') { 
-            if (typeof parsed !== 'object') throw new Error("Landmarks must be a JSON object (city-keyed).");
+            if (typeof parsed !== 'object') throw new Error("Landmarks must be a JSON object.");
             state.settings.poiCache = parsed; 
             renderPOISelectors(); 
+        }
+        else if (state.importType === 'styles') {
+            if (!Array.isArray(parsed)) throw new Error("Styles must be an array of strings.");
+            state.settings.styles = parsed;
+            renderStyles();
         }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
@@ -108,7 +127,7 @@ function confirmImport() {
         closeImport();
     } catch(e) { 
         alert("Import failed: " + e.message); 
-        console.error("JSON Error at position:", e.message);
+        console.error("JSON Cleaned attempt:", e.message);
     }
 }
 
@@ -230,6 +249,7 @@ function exportData(type) {
     let data = {};
     if (type === 'themes') data = state.settings.themes;
     else if (type === 'pois') data = state.settings.poiCache;
+    else if (type === 'styles') data = state.settings.styles;
     else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
     
     console.log("Lumina Export (" + type + "):", JSON.stringify(data, null, 2));
@@ -239,8 +259,9 @@ function exportData(type) {
 function clearCategory(type) {
     if (!confirm("Wipe all " + type + "?")) return;
     if (type === 'themes') state.settings.themes = [];
+    else if (type === 'styles') state.settings.styles = ["Hyper photo realistic"];
     else state.settings.poiCache = {};
-    save(); renderThemes(); renderPOISelectors();
+    save(); renderThemes(); renderPOISelectors(); renderStyles();
 }
 
 function renderStyles() {
