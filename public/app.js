@@ -57,64 +57,61 @@ function openImport(type) {
 function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
 
 /**
- * SUPER FIXED confirmImport:
- * Aggressively cleans input to handle messy AI-generated JSON.
+ * MEGA-ROBUST confirmImport:
+ * Automatically repairs unescaped quotes and bad characters from AI pastes.
  */
 function confirmImport() {
     let raw = document.getElementById('import-text').value;
     if (!raw) return closeImport();
     try {
-        // 1. Find the bounds of the JSON object/array
-        let start = raw.indexOf('{'); 
-        if (start === -1 || (raw.indexOf('[') !== -1 && raw.indexOf('[') < start)) start = raw.indexOf('[');
-        
-        let end = raw.lastIndexOf('}'); 
-        if (end === -1 || (raw.lastIndexOf(']') !== -1 && raw.lastIndexOf(']') > end)) end = raw.lastIndexOf(']');
+        // 1. Find the bounds correctly
+        const startBrace = raw.indexOf('{');
+        const startBracket = raw.indexOf('[');
+        let start = -1;
+        if (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) start = startBrace;
+        else start = startBracket;
+
+        const endBrace = raw.lastIndexOf('}');
+        const endBracket = raw.lastIndexOf(']');
+        let end = -1;
+        if (endBrace !== -1 && (endBracket === -1 || endBrace > endBracket)) end = endBrace;
+        else end = endBracket;
         
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
-        // 2. Extract and sanitize
+        // 2. Initial extraction and character cleanup
         let cleaned = raw.substring(start, end + 1);
-        
-        // Replace smart quotes, hidden characters, and normalized whitespace
-        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Double smart quotes
-                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Single smart quotes
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Zero-width spaces
+        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Smart double quotes
+                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Smart single quotes
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Hidden chars
                          .replace(/\r\n/g, "\n"); 
-            
-        // 3. Fix trailing commas (JSON.parse doesn't allow them)
-        // Aggressive regex for trailing commas in objects and arrays
+
+        // 3. AGGRESSIVE REPAIR for unescaped internal quotes and raw newlines
+        // This looks for content inside "key": "content" and fixes the content
+        cleaned = cleaned.replace(/":\s*"([\s\S]*?)"\s*([,}])/g, (match, content, suffix) => {
+            // Escape any unescaped double quotes inside the content
+            let repaired = content.replace(/(?<!\\)"/g, '\\"');
+            // Escape raw newlines
+            repaired = repaired.replace(/\n/g, "\\n");
+            return '": "' + repaired + '"' + suffix;
+        });
+
+        // 4. Fix trailing commas
         cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
         
-        // 4. Final attempt at cleaning: ensure internal strings don't have unescaped newlines
-        // Note: This is complex, but often AI output contains raw newlines in descriptions.
-        // We'll try to parse first, then fallback to newline-fixing if it fails.
-        let parsed;
-        try {
-            parsed = JSON.parse(cleaned);
-        } catch (initialError) {
-            // Fallback: Escape raw newlines inside strings
-            // This is a naive regex but often helps
-            cleaned = cleaned.replace(/: "([\s\S]*?)"/g, (match, p1) => {
-                return ': "' + p1.replace(/\n/g, "\\n") + '"';
-            });
-            parsed = JSON.parse(cleaned);
-        }
+        const parsed = JSON.parse(cleaned);
         
         if (state.importType === 'themes') { 
             if (!Array.isArray(parsed)) throw new Error("Themes must be an array.");
-            state.settings.themes = parsed; 
-            renderThemes(); 
+            state.settings.themes = parsed; renderThemes(); 
         }
         else if (state.importType === 'pois') { 
             if (typeof parsed !== 'object') throw new Error("Landmarks must be a JSON object.");
-            state.settings.poiCache = parsed; 
-            renderPOISelectors(); 
+            state.settings.poiCache = parsed; renderPOISelectors(); 
         }
         else if (state.importType === 'styles') {
             if (!Array.isArray(parsed)) throw new Error("Styles must be an array of strings.");
-            state.settings.styles = parsed;
-            renderStyles();
+            state.settings.styles = parsed; renderStyles();
         }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
@@ -122,12 +119,10 @@ function confirmImport() {
             loadEditorPrompt(); 
         }
         
-        save(); 
-        alert("Import successful!");
-        closeImport();
+        save(); alert("Import successful!"); closeImport();
     } catch(e) { 
         alert("Import failed: " + e.message); 
-        console.error("JSON Cleaned attempt:", e.message);
+        console.error("Failed JSON string for debugging:", raw);
     }
 }
 
@@ -140,13 +135,11 @@ async function fetchModels() {
         sel.innerHTML = "";
         models.forEach(m => {
             const opt = document.createElement('option');
-            opt.value = m.name;
-            opt.innerText = m.name + (m.paid_only ? ' *' : '');
+            opt.value = m.name; opt.innerText = m.name + (m.paid_only ? ' *' : '');
             sel.appendChild(opt);
         });
         sel.value = state.settings.model || "gptimage";
     } catch(e) {
-        console.error("Model fetch failed", e);
         const sel = document.getElementById('set-model'); 
         if(sel) sel.innerHTML = '<option value="gptimage">GPT Image</option><option value="flux">Flux</option>';
     }
@@ -167,9 +160,7 @@ function setupUI() {
     document.getElementById('set-seed').value = state.settings.seed;
     document.getElementById('set-neg-enable').checked = state.settings.negEnable;
     document.getElementById('set-neg').value = state.settings.negativePrompt;
-    
-    toggleCustomLoc(); 
-    renderTokens();
+    toggleCustomLoc(); renderTokens();
 }
 
 function renderTokens() {
@@ -181,10 +172,8 @@ function renderTokens() {
         c.className = 'chip'; c.innerText = t;
         c.onclick = () => {
             const area = document.getElementById('prompt-editor');
-            const start = area.selectionStart;
-            const end = area.selectionEnd;
-            area.setRangeText(t, start, end, 'end');
-            saveEditorPrompt();
+            const start = area.selectionStart; const end = area.selectionEnd;
+            area.setRangeText(t, start, end, 'end'); saveEditorPrompt();
         };
         chipContainer.appendChild(c);
     });
@@ -211,7 +200,6 @@ function syncSettings() {
     state.settings.apiKey = document.getElementById('set-apikey').value;
     state.settings.locMode = document.getElementById('set-loc-mode').value;
     state.settings.customCity = document.getElementById('set-city').value;
-    
     state.settings.transparent = document.getElementById('set-transparent').checked;
     state.settings.safe = document.getElementById('set-safe').checked;
     state.settings.enhance = document.getElementById('set-enhance').checked;
@@ -219,7 +207,6 @@ function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
-    
     save();
 }
 
@@ -236,8 +223,7 @@ async function validateCustomLoc() {
         const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(cityStr));
         const data = await res.json();
         if (data.length > 0) {
-            state.lat = parseFloat(data[0].lat);
-            state.lon = parseFloat(data[0].lon);
+            state.lat = parseFloat(data[0].lat); state.lon = parseFloat(data[0].lon);
             state.city = data[0].display_name.split(',')[0].trim();
             document.getElementById('coord-text').innerText = "Validated: " + state.lat.toFixed(2);
             syncSettings();
@@ -252,8 +238,10 @@ function exportData(type) {
     else if (type === 'styles') data = state.settings.styles;
     else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
     
-    console.log("Lumina Export (" + type + "):", JSON.stringify(data, null, 2));
-    alert("JSON logged to browser console (F12).");
+    // Show in the UI instead of just console
+    document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
+    document.getElementById('import-text').value = JSON.stringify(data, null, 2);
+    document.getElementById('import-modal').classList.add('active');
 }
 
 function clearCategory(type) {
@@ -265,10 +253,8 @@ function clearCategory(type) {
 }
 
 function renderStyles() {
-    const list = document.getElementById('style-list');
-    const sel = document.getElementById('set-style');
+    const list = document.getElementById('style-list'); const sel = document.getElementById('set-style');
     if(!list || !sel) return;
-    
     list.innerHTML = ""; sel.innerHTML = "";
     state.settings.styles.forEach((s, i) => {
         const row = document.createElement('div'); row.className = 'list-item';
@@ -283,13 +269,8 @@ function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); sa
 
 function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); save(); }
 function addThemePrompt() {
-    const Theme = prompt("Theme Name:");
-    const Begin = prompt("Start MMDD:");
-    const End = prompt("End MMDD:");
-    if (Theme && Begin && End) { 
-        state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); 
-        renderThemes(); save(); 
-    }
+    const Theme = prompt("Theme Name:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:");
+    if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); save(); }
 }
 function renderThemes() {
     const list = document.getElementById('theme-list'); if(!list) return;
@@ -305,17 +286,14 @@ function renderPOISelectors() {
     const sel = document.getElementById('poi-city-select'); if(!sel) return;
     sel.innerHTML = "";
     Object.keys(state.settings.poiCache).forEach(city => {
-        const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase();
-        sel.appendChild(opt);
+        const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt);
     });
     renderPOIs();
 }
 function renderPOIs() {
     const list = document.getElementById('poi-list'); if(!list) return;
     const city = document.getElementById('poi-city-select').value;
-    list.innerHTML = ""; 
-    if (!city || !state.settings.poiCache[city]) return;
-    
+    list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return;
     state.settings.poiCache[city].forEach((p, i) => {
         const row = document.createElement('div'); row.className = 'list-item';
         row.innerHTML = '<div><div class="list-item-title">' + p.name + '</div><div class="list-item-sub">' + (p.description || "") + '</div></div><div><button onclick="consultPOI(\'' + city + '\', ' + i + ')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI(\'' + city + '\', ' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button></div>';
@@ -330,57 +308,37 @@ function deleteCity() {
 }
 
 async function consultPOI(city, i) {
-    const p = state.settings.poiCache[city][i];
-    const btn = event.currentTarget; 
+    const p = state.settings.poiCache[city][i]; const btn = event.currentTarget; 
     btn.disabled = true; btn.innerText = "...";
     try {
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
-        const data = await res.json();
-        p.description = data.description; 
-        renderPOIs(); save();
-    } finally { 
-        btn.disabled = false; btn.innerText = "Consult"; 
-    }
+        const data = await res.json(); p.description = data.description; renderPOIs(); save();
+    } finally { btn.disabled = false; btn.innerText = "Consult"; }
 }
 
 async function addPOIPrompt() {
     const city = document.getElementById('poi-city-select').value || prompt("City (lowercase):").toLowerCase();
     if (!city) return;
-    const name = prompt("Landmark Name:");
-    if (!name) return;
+    const name = prompt("Landmark Name:"); if (!name) return;
     const desc = confirm("Use AI description?") ? "..." : prompt("Description:");
     if (!state.settings.poiCache[city]) state.settings.poiCache[city] = [];
     const idx = state.settings.poiCache[city].push({name, description: desc}) - 1;
-    renderPOISelectors(); save();
-    if (desc === "...") consultPOI(city, idx);
+    renderPOISelectors(); save(); if (desc === "...") consultPOI(city, idx);
 }
 
 async function discoverPOIs() {
-    const city = state.city;
-    const btn = event.currentTarget; 
-    if(btn && btn.id === 'btn-gen-ui') {
-        // Silent mode called by generate
-    } else if(btn) {
-        btn.disabled = true; btn.innerText = "Finding...";
-    }
-    
+    const city = state.city; const btn = event.currentTarget; 
+    if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = true; btn.innerText = "Finding..."; }
     try {
         const res = await fetch("/api/proxy/poi?city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
-        const data = await res.json();
-        const cityKey = city.toLowerCase().trim();
+        const data = await res.json(); const cityKey = city.toLowerCase().trim();
         if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = [];
         state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
         renderPOISelectors(); save();
-    } catch(e) {
-    } finally { 
-        if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = false; btn.innerText = "✨ AI Discover"; } 
-    }
+    } catch(e) {} finally { if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = false; btn.innerText = "✨ AI Discover"; } }
 }
 
-function openFullRes() {
-    const src = document.getElementById('result-image').src;
-    if (src) window.open(src, '_blank');
-}
+function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
 
 function browserSanitize(input) {
     if (!input) return "";
@@ -398,66 +356,37 @@ function browserSanitize(input) {
 
 async function handleGenerate() {
     if (state.isGenerating) return;
-    state.isGenerating = true;
-    const btn = document.getElementById('btn-gen-ui');
+    state.isGenerating = true; const btn = document.getElementById('btn-gen-ui');
     btn.disabled = true; btn.innerText = "Locating...";
     startFireflies(); document.getElementById('firefly-canvas').classList.add('active');
-
     try {
         const envRes = await fetch("/api/proxy/weather?lat=" + state.lat + "&lon=" + state.lon);
-        const env = await envRes.json();
-        const cityKey = state.city.toLowerCase().trim();
-        
-        if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) {
-            btn.innerText = "Discovering...";
-            await discoverPOIs();
-        }
-        
+        const env = await envRes.json(); const cityKey = state.city.toLowerCase().trim();
+        if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) { btn.innerText = "Discovering..."; await discoverPOIs(); }
         const pois = state.settings.poiCache[cityKey] || [{name: state.city, description: "A beautiful view"}];
-        const poi = pois[Math.floor(Math.random() * pois.length)];
-        const theme = getThemeForDate();
-
-        btn.innerText = "Dreaming...";
-        const rawP = buildPrompt(env, poi, theme);
+        const poi = pois[Math.floor(Math.random() * pois.length)]; const theme = getThemeForDate();
+        btn.innerText = "Dreaming..."; const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
-        
-        const [w, h] = state.settings.resolution.split('x');
-        const seed = state.settings.seedEnable ? state.settings.seed : Math.floor(Math.random()*999999);
+        const [w, h] = state.settings.resolution.split('x'); const seed = state.settings.seedEnable ? state.settings.seed : Math.floor(Math.random()*999999);
         let url = "https://gen.pollinations.ai/image/" + encodeURIComponent(cleanP) + "?width=" + w + "&height=" + h + "&seed=" + seed + "&model=" + state.settings.model + "&nologo=true";
-        
         if (state.settings.apiKey) url += "&key=" + state.settings.apiKey;
         if (state.settings.transparent) url += "&transparent=true";
         if (state.settings.safe === false) url += "&safe=false";
         if (state.settings.enhance) url += "&enhance=true";
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
-
-        const img = document.getElementById('result-image');
-        img.classList.remove('loaded'); img.src = url;
+        const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = url;
         img.onload = () => {
-            img.classList.add('loaded'); stopFireflies();
-            document.getElementById('firefly-canvas').classList.remove('active');
+            img.classList.add('loaded'); stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
             document.getElementById('placeholder').style.display = 'none';
-            
-            if (state.settings.overlayLabel) {
-                document.getElementById('poi-label').innerText = poi.name;
-                document.getElementById('poi-label').style.display = 'block';
-                document.getElementById('info-overlay').style.display = 'none';
-            } else {
-                document.getElementById('poi-label').style.display = 'none';
-                document.getElementById('info-overlay').style.display = 'block';
-                document.getElementById('theme-tag').innerText = theme.toUpperCase();
-                document.getElementById('poi-name').innerText = poi.name;
-                document.getElementById('poi-desc').innerText = poi.description || "";
-            }
-            document.getElementById('btn-save-ui').style.display = 'block';
-            btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
+            if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
+            else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
+            document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
         };
     } catch(e) { alert("Error: " + e.message); btn.disabled = false; state.isGenerating = false; stopFireflies(); }
 }
 
 function buildPrompt(env, poi, theme) {
-    const isDay = env.is_day;
-    let p = isDay ? state.settings.promptDay : state.settings.promptNight;
+    const isDay = env.is_day; let p = isDay ? state.settings.promptDay : state.settings.promptNight;
     const now = new Date();
     const vars = {
         "{style}": state.settings.style, "{poi_name}": poi.name, "{poi_desc}": poi.description || "",
@@ -470,9 +399,7 @@ function buildPrompt(env, poi, theme) {
         "{moon_phase}": env.moon_phase || "Visible", "{moon_illumination}": (env.moon_illumination || "0") + " percent",
         "{moonrise}": env.moonrise || "N/A", "{moonset}": env.moonset || "N/A"
     };
-    for (const [k, v] of Object.entries(vars)) {
-        p = p.split(k).join(v || "");
-    }
+    for (const [k, v] of Object.entries(vars)) { p = p.split(k).join(v || ""); }
     if (state.settings.quality === 'high') p += ", 8k resolution, masterpiece";
     if (state.settings.quality === 'hd') p += ", 16k resolution, cinematic lighting";
     return p;
@@ -480,21 +407,12 @@ function buildPrompt(env, poi, theme) {
 
 let animId;
 function startFireflies() {
-    const canvas = document.getElementById('firefly-canvas');
-    if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
-    const particles = Array.from({length: 40}, () => ({
-        x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-        size: Math.random() * 2 + 1, speed: Math.random() * 0.8 + 0.2, phase: Math.random() * 10
-    }));
+    const canvas = document.getElementById('firefly-canvas'); if(!canvas) return;
+    const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
+    const particles = Array.from({length: 40}, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 1, speed: Math.random() * 0.8 + 0.2, phase: Math.random() * 10 }));
     function loop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => {
-            p.y -= p.speed; if (p.y < 0) p.y = canvas.height;
-            ctx.globalAlpha = Math.pow((Math.sin(Date.now()/300 + p.phase) + 1)/2, 8);
-            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-        });
+        particles.forEach(p => { p.y -= p.speed; if (p.y < 0) p.y = canvas.height; ctx.globalAlpha = Math.pow((Math.sin(Date.now()/300 + p.phase) + 1)/2, 8); ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
         animId = requestAnimationFrame(loop);
     }
     loop();
@@ -512,7 +430,6 @@ function switchSubTab(tab) {
     document.getElementById('sub-pois').style.display = tab === 'pois' ? 'block' : 'none';
     document.getElementById('sub-styles').style.display = tab === 'styles' ? 'block' : 'none';
     document.getElementById('sub-prompts-data').style.display = tab === 'prompts' ? 'block' : 'none';
-    
     document.getElementById('tab-themes').classList.toggle('active', tab === 'themes');
     document.getElementById('tab-pois').classList.toggle('active', tab === 'pois');
     document.getElementById('tab-styles').classList.toggle('active', tab === 'styles');
@@ -533,8 +450,7 @@ function requestLocation() {
 }
 
 function getThemeForDate() {
-    const now = new Date();
-    const ord = (now.getMonth() + 1) * 100 + now.getDate();
+    const now = new Date(); const ord = (now.getMonth() + 1) * 100 + now.getDate();
     const match = state.settings.themes.find(t => ord >= t.Begin && ord <= t.End);
     return match ? match.Theme : "General";
 }
@@ -549,10 +465,8 @@ function renderProfiles() {
     });
 }
 function saveProfile() {
-    const name = document.getElementById('new-profile-name').value;
-    if (!name) return alert("Enter a name");
-    state.settings.profiles.push({ name, ...state.settings });
-    renderProfiles(); save(); document.getElementById('new-profile-name').value = "";
+    const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter a name");
+    state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = "";
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
