@@ -14,20 +14,21 @@ var state = {
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
         styles: ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"],
+        locations: [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}],
         transparent: false, safe: true, enhance: false, seedEnable: false, seed: 0, negativePrompt: "", negEnable: false
     }
 };
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.0');
+    const saved = localStorage.getItem('lumina_v1.10.1');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.9.9') || localStorage.getItem('lumina_v1.9.8') || localStorage.getItem('lumina_v1.9.7');
+        const old = localStorage.getItem('lumina_v1.10.0') || localStorage.getItem('lumina_v1.9.9');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -38,14 +39,15 @@ window.onload = async () => {
     
     if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"];
     if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
+    if(!state.settings.locations) state.settings.locations = [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}];
 
     await fetchModels();
-    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles();
+    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles(); renderLocations();
     
     if (state.settings.locMode === 'gps') requestLocation();
 };
 
-function save() { localStorage.setItem('lumina_v1.10.0', JSON.stringify(state.settings)); }
+function save() { localStorage.setItem('lumina_v1.10.1', JSON.stringify(state.settings)); }
 
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
@@ -56,15 +58,10 @@ function openImport(type) {
 }
 function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
 
-/**
- * MEGA-ROBUST confirmImport:
- * Automatically repairs unescaped quotes and bad characters from AI pastes.
- */
 function confirmImport() {
     let raw = document.getElementById('import-text').value;
     if (!raw) return closeImport();
     try {
-        // 1. Find the bounds correctly
         const startBrace = raw.indexOf('{');
         const startBracket = raw.indexOf('[');
         let start = -1;
@@ -79,39 +76,33 @@ function confirmImport() {
         
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
-        // 2. Initial extraction and character cleanup
         let cleaned = raw.substring(start, end + 1);
-        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Smart double quotes
-                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Smart single quotes
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Hidden chars
+        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "")
                          .replace(/\r\n/g, "\n"); 
 
-        // 3. AGGRESSIVE REPAIR for unescaped internal quotes and raw newlines
-        // This looks for content inside "key": "content" and fixes the content
         cleaned = cleaned.replace(/":\s*"([\s\S]*?)"\s*([,}])/g, (match, content, suffix) => {
-            // Escape any unescaped double quotes inside the content
             let repaired = content.replace(/(?<!\\)"/g, '\\"');
-            // Escape raw newlines
             repaired = repaired.replace(/\n/g, "\\n");
             return '": "' + repaired + '"' + suffix;
         });
 
-        // 4. Fix trailing commas
         cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
         
         const parsed = JSON.parse(cleaned);
         
         if (state.importType === 'themes') { 
-            if (!Array.isArray(parsed)) throw new Error("Themes must be an array.");
             state.settings.themes = parsed; renderThemes(); 
         }
         else if (state.importType === 'pois') { 
-            if (typeof parsed !== 'object') throw new Error("Landmarks must be a JSON object.");
             state.settings.poiCache = parsed; renderPOISelectors(); 
         }
         else if (state.importType === 'styles') {
-            if (!Array.isArray(parsed)) throw new Error("Styles must be an array of strings.");
             state.settings.styles = parsed; renderStyles();
+        }
+        else if (state.importType === 'locations') {
+            state.settings.locations = parsed; renderLocations();
         }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
@@ -120,10 +111,7 @@ function confirmImport() {
         }
         
         save(); alert("Import successful!"); closeImport();
-    } catch(e) { 
-        alert("Import failed: " + e.message); 
-        console.error("Failed JSON string for debugging:", raw);
-    }
+    } catch(e) { alert("Import failed: " + e.message); }
 }
 
 async function fetchModels() {
@@ -152,7 +140,6 @@ function setupUI() {
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
     document.getElementById('set-apikey').value = state.settings.apiKey;
     document.getElementById('set-loc-mode').value = state.settings.locMode;
-    document.getElementById('set-city').value = state.settings.customCity;
     document.getElementById('set-transparent').checked = state.settings.transparent;
     document.getElementById('set-safe').checked = state.settings.safe;
     document.getElementById('set-enhance').checked = state.settings.enhance;
@@ -199,7 +186,6 @@ function syncSettings() {
     state.settings.overlayLabel = document.getElementById('set-overlay').checked;
     state.settings.apiKey = document.getElementById('set-apikey').value;
     state.settings.locMode = document.getElementById('set-loc-mode').value;
-    state.settings.customCity = document.getElementById('set-city').value;
     state.settings.transparent = document.getElementById('set-transparent').checked;
     state.settings.safe = document.getElementById('set-safe').checked;
     state.settings.enhance = document.getElementById('set-enhance').checked;
@@ -212,33 +198,65 @@ function syncSettings() {
 
 function toggleCustomLoc() {
     const isCustom = document.getElementById('set-loc-mode').value === 'custom';
-    const row = document.getElementById('row-custom-city');
+    const row = document.getElementById('row-custom-list');
     if (row) row.style.display = isCustom ? 'flex' : 'none';
+    if (isCustom) renderCustomLocList();
 }
 
-async function validateCustomLoc() {
-    const cityStr = document.getElementById('set-city').value;
-    if (!cityStr || cityStr.length < 3) return;
-    try {
-        const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(cityStr));
-        const data = await res.json();
-        if (data.length > 0) {
-            state.lat = parseFloat(data[0].lat); state.lon = parseFloat(data[0].lon);
-            state.city = data[0].display_name.split(',')[0].trim();
-            document.getElementById('coord-text').innerText = "Validated: " + state.lat.toFixed(2);
-            syncSettings();
-        }
-    } catch(e) {}
+function renderCustomLocList() {
+    const sel = document.getElementById('set-custom-loc');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Choose...</option>';
+    state.settings.locations.forEach((loc, i) => {
+        const opt = document.createElement('option');
+        opt.value = i; opt.innerText = loc.city + (loc.state ? ", " + loc.state : "");
+        sel.appendChild(opt);
+    });
 }
+
+function applySavedLoc() {
+    const idx = document.getElementById('set-custom-loc').value;
+    if (idx === "") return;
+    const loc = state.settings.locations[idx];
+    state.lat = loc.lat; state.lon = loc.lon;
+    state.city = loc.city; state.state = loc.state || ""; state.country = loc.country || "";
+    document.getElementById('coord-text').innerText = "SAVED: " + state.lat.toFixed(2);
+    save();
+}
+
+function renderLocations() {
+    const list = document.getElementById('location-list');
+    if(!list) return;
+    list.innerHTML = "";
+    state.settings.locations.forEach((loc, i) => {
+        const row = document.createElement('div'); row.className = 'list-item';
+        row.innerHTML = '<div><div class="list-item-title">' + loc.city + '</div><div class="list-item-sub">' + (loc.state || loc.country) + ' (' + loc.lat.toFixed(2) + ', ' + loc.lon.toFixed(2) + ')</div></div><button onclick="deleteLocation(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>';
+        list.appendChild(row);
+    });
+    renderPOISelectors(); 
+}
+
+function addLocationPrompt() {
+    const city = prompt("City Name:"); if (!city) return;
+    const stateVal = prompt("State/Region (Optional):");
+    const country = prompt("Country (e.g. USA):");
+    const lat = prompt("Latitude:");
+    const lon = prompt("Longitude:");
+    if (city && lat && lon) {
+        state.settings.locations.push({city, state: stateVal, country, lat: parseFloat(lat), lon: parseFloat(lon)});
+        renderLocations(); save();
+    }
+}
+function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); save(); }
 
 function exportData(type) {
     let data = {};
     if (type === 'themes') data = state.settings.themes;
     else if (type === 'pois') data = state.settings.poiCache;
     else if (type === 'styles') data = state.settings.styles;
+    else if (type === 'locations') data = state.settings.locations;
     else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
     
-    // Show in the UI instead of just console
     document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
@@ -248,8 +266,9 @@ function clearCategory(type) {
     if (!confirm("Wipe all " + type + "?")) return;
     if (type === 'themes') state.settings.themes = [];
     else if (type === 'styles') state.settings.styles = ["Hyper photo realistic"];
+    else if (type === 'locations') state.settings.locations = [];
     else state.settings.poiCache = {};
-    save(); renderThemes(); renderPOISelectors(); renderStyles();
+    save(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
 }
 
 function renderStyles() {
@@ -285,7 +304,10 @@ function renderThemes() {
 function renderPOISelectors() {
     const sel = document.getElementById('poi-city-select'); if(!sel) return;
     sel.innerHTML = "";
-    Object.keys(state.settings.poiCache).forEach(city => {
+    const cachedCities = Object.keys(state.settings.poiCache);
+    const savedCities = state.settings.locations.map(l => l.city.toLowerCase());
+    const allCities = [...new Set([...cachedCities, ...savedCities])].sort();
+    allCities.forEach(city => {
         const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt);
     });
     renderPOIs();
@@ -307,6 +329,42 @@ function deleteCity() {
     delete state.settings.poiCache[city]; renderPOISelectors(); save();
 }
 
+function openPOIModal() {
+    const sel = document.getElementById('modal-poi-city');
+    sel.innerHTML = "";
+    state.settings.locations.forEach(loc => {
+        const opt = document.createElement('option'); opt.value = loc.city.toLowerCase(); opt.innerText = loc.city;
+        sel.appendChild(opt);
+    });
+    document.getElementById('poi-modal').style.display = 'flex';
+}
+function closePOIModal() { document.getElementById('poi-modal').style.display = 'none'; }
+
+async function sanitizePOIModal() {
+    const name = document.getElementById('modal-poi-name').value;
+    const desc = document.getElementById('modal-poi-desc').value;
+    const city = document.getElementById('modal-poi-city').value;
+    if (!name) return alert("Enter a name first");
+    const btn = document.getElementById('btn-modal-sanitize');
+    btn.disabled = true; btn.innerText = "Sanitizing...";
+    try {
+        const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
+        const data = await res.json();
+        document.getElementById('modal-poi-name').value = data.name;
+        document.getElementById('modal-poi-desc').value = data.description;
+    } finally { btn.disabled = false; btn.innerText = "✨ AI Sanitize"; }
+}
+
+function savePOIModal() {
+    const city = document.getElementById('modal-poi-city').value;
+    const name = document.getElementById('modal-poi-name').value;
+    const description = document.getElementById('modal-poi-desc').value;
+    if (!city || !name) return alert("City and Name required");
+    if (!state.settings.poiCache[city]) state.settings.poiCache[city] = [];
+    state.settings.poiCache[city].push({name, description});
+    renderPOISelectors(); save(); closePOIModal();
+}
+
 async function consultPOI(city, i) {
     const p = state.settings.poiCache[city][i]; const btn = event.currentTarget; 
     btn.disabled = true; btn.innerText = "...";
@@ -314,16 +372,6 @@ async function consultPOI(city, i) {
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
         const data = await res.json(); p.description = data.description; renderPOIs(); save();
     } finally { btn.disabled = false; btn.innerText = "Consult"; }
-}
-
-async function addPOIPrompt() {
-    const city = document.getElementById('poi-city-select').value || prompt("City (lowercase):").toLowerCase();
-    if (!city) return;
-    const name = prompt("Landmark Name:"); if (!name) return;
-    const desc = confirm("Use AI description?") ? "..." : prompt("Description:");
-    if (!state.settings.poiCache[city]) state.settings.poiCache[city] = [];
-    const idx = state.settings.poiCache[city].push({name, description: desc}) - 1;
-    renderPOISelectors(); save(); if (desc === "...") consultPOI(city, idx);
 }
 
 async function discoverPOIs() {
@@ -428,10 +476,12 @@ function switchTab(tab) {
 function switchSubTab(tab) {
     document.getElementById('sub-themes').style.display = tab === 'themes' ? 'block' : 'none';
     document.getElementById('sub-pois').style.display = tab === 'pois' ? 'block' : 'none';
+    document.getElementById('sub-locations').style.display = tab === 'locations' ? 'block' : 'none';
     document.getElementById('sub-styles').style.display = tab === 'styles' ? 'block' : 'none';
     document.getElementById('sub-prompts-data').style.display = tab === 'prompts' ? 'block' : 'none';
     document.getElementById('tab-themes').classList.toggle('active', tab === 'themes');
     document.getElementById('tab-pois').classList.toggle('active', tab === 'pois');
+    document.getElementById('tab-locations').classList.toggle('active', tab === 'locations');
     document.getElementById('tab-styles').classList.toggle('active', tab === 'styles');
     document.getElementById('tab-data-prompts').classList.toggle('active', tab === 'prompts');
 }
@@ -468,7 +518,7 @@ function saveProfile() {
     const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter a name");
     state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = "";
 }
-function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); alert("Loaded Profile: " + state.settings.name); }
+function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.0'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.1'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }
