@@ -1,0 +1,18 @@
+{
+        "$schema": "node_modules/wrangler/config-schema.json",
+        "name": "lumina-aeris-web",
+        "compatibility_date": "2025-09-27",
+        "pages_build_output_dir": "public",
+        "observability": {
+                "enabled": true
+        },
+        "compatibility_flags": [
+                "nodejs_compat"
+        ],
+        "kv_namespaces": [
+                {
+                        "binding": "LUMINA_SETTINGS",
+                        "id": "70354407a1f14d98a37506c6138714ff"
+                }
+        ]
+}
