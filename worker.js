@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Management Suite v1.10.11
+// Lumina Aeris Web & Worker - Management Suite v1.10.12
 // FULL VERSION - 100% COMPLETE - NO PLACEHOLDERS.
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
@@ -272,7 +272,7 @@ var state = {
         // --- 2. INITIALIZATION ---
         window.onload = async () => {
         // Attempt to load settings
-        const saved = localStorage.getItem('lumina_v1.10.11');
+        const saved = localStorage.getItem('lumina_v1.10.12');
         if (saved) {
         try {
             const parsed = JSON.parse(saved);
@@ -297,7 +297,7 @@ var state = {
                 const remote = await res.json();
                 if (remote && remote.promptDay) {
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
@@ -314,7 +314,7 @@ var state = {
         };
 
         async function save() { 
-        localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
+        localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
         if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {
@@ -393,14 +393,14 @@ async function fetchModels() {
     }
 
     try {
-        const txtRes = await fetch('https://text.pollinations.ai/models');
+        const txtRes = await fetch('https://gen.pollinations.ai/text/models');
         const txtModels = await txtRes.json();
         const tsel = document.getElementById('set-text-model');
         if (tsel) {
             tsel.innerHTML = "";
-            txtModels.filter(m => !m.paid_only).forEach(m => {
+            txtModels.forEach(m => {
                 const opt = document.createElement('option');
-                opt.value = m.name; opt.innerText = m.name;
+                opt.value = m.name; opt.innerText = m.name + (m.paid_only ? ' *' : '');
                 tsel.appendChild(opt);
             });
             tsel.value = state.settings.textModel || "gemini-search";

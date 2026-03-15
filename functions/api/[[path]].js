@@ -1,4 +1,4 @@
-// Lumina Aeris Web Backend - Functions v1.10.11
+// Lumina Aeris Web Backend - Functions v1.10.12
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 const WMO_MAP = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 61: "Rain", 71: "Snow", 95: "Thunderstorm" };
@@ -136,6 +136,8 @@ export async function onRequest(context) {
             const secret = request.headers.get("X-Lumina-Secret") || url.searchParams.get("secret");
             if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401 });
 
+            if (!env.LUMINA_SETTINGS) return new Response(JSON.stringify({ error: "KV Binding 'LUMINA_SETTINGS' is not configured in Cloudflare." }), { status: 500, headers: { "Content-Type": "application/json" } });
+
             if (request.method === "POST") {
                 try {
                     const body = await request.json();
@@ -143,8 +145,10 @@ export async function onRequest(context) {
                     return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
                 } catch(e) { return new Response(e.message, { status: 500 }); }
             } else {
-                const config = await env.LUMINA_SETTINGS.get("settings");
-                return new Response(config || "{}", { headers: { "Content-Type": "application/json" } });
+                try {
+                    const config = await env.LUMINA_SETTINGS.get("settings");
+                    return new Response(config || "{}", { headers: { "Content-Type": "application/json" } });
+                } catch(e) { return new Response(e.message, { status: 500 }); }
             }
         }
 
@@ -154,7 +158,10 @@ export async function onRequest(context) {
             if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401 });
 
             // Load Global Settings from KV
-            const kvConfigRaw = await env.LUMINA_SETTINGS.get("settings");
+            let kvConfigRaw = null;
+            if (env.LUMINA_SETTINGS) {
+                try { kvConfigRaw = await env.LUMINA_SETTINGS.get("settings"); } catch(e) {}
+            }
             const config = kvConfigRaw ? JSON.parse(kvConfigRaw) : { 
                 promptDay: SHARED_DEFAULT_DAY, promptNight: SHARED_DEFAULT_NIGHT,
                 promptPOIDomestic: SHARED_DEFAULT_POI_DOMESTIC, promptPOIIntl: SHARED_DEFAULT_POI_INTL,
@@ -169,7 +176,10 @@ export async function onRequest(context) {
             const cityKey = `poi:${city.toLowerCase().trim()}`;
 
             // Check KV for cached POIs
-            let poiListRaw = await env.LUMINA_SETTINGS.get(cityKey);
+            let poiListRaw = null;
+            if (env.LUMINA_SETTINGS) {
+                try { poiListRaw = await env.LUMINA_SETTINGS.get(cityKey); } catch(e) {}
+            }
             let pois = poiListRaw ? JSON.parse(poiListRaw) : [];
 
             // If no POIs cached, run Discovery
@@ -198,7 +208,9 @@ export async function onRequest(context) {
                     pois = Array.isArray(discoveredData) ? discoveredData : [discoveredData];
                     
                     // Save to KV for next time
-                    await env.LUMINA_SETTINGS.put(cityKey, JSON.stringify(pois));
+                    if (env.LUMINA_SETTINGS) {
+                        try { await env.LUMINA_SETTINGS.put(cityKey, JSON.stringify(pois)); } catch(e) {}
+                    }
                 } catch(e) { 
                     pois = [{ name: city, description: "A beautiful local landmark." }];
                 }
