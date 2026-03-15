@@ -261,46 +261,73 @@ var state = {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
         quality: "medium", model: "gptimage", textModel: "openai", style: "Hyper photo realistic", resolution: "1290x2796",
-        overlayLabel: false, apiKey: "", locMode: "gps", customCity: "Portland, Oregon",
+        overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", customCity: "Portland, Oregon",
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
         styles: ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"],
         transparent: false, safe: true, enhance: false, seedEnable: false, seed: 0, negativePrompt: "", negEnable: false
-    }
-};
+        }
+        };
 
-// --- 2. INITIALIZATION ---
-window.onload = async () => {
-    // Attempt to load settings
-    const saved = localStorage.getItem('lumina_v1.9.9');
-    if (saved) {
-        try { 
+        // --- 2. INITIALIZATION ---
+        window.onload = async () => {
+        // Attempt to load settings
+        const saved = localStorage.getItem('lumina_v1.9.9');
+        if (saved) {
+        try {
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
-    } else {
+        } else {
         // Fallback to previous versions if needed
         const old = localStorage.getItem('lumina_v1.9.8') || localStorage.getItem('lumina_v1.9.7') || localStorage.getItem('lumina_v1.9.6');
-        if (old) { 
-            try { 
-                Object.assign(state.settings, JSON.parse(old)); 
-                save(); 
-            } catch(e) {} 
+        if (old) {
+            try {
+                Object.assign(state.settings, JSON.parse(old));
+                save();
+            } catch(e) {}
         }
-    }
-    
-    // Ensure critical defaults exist if cache was empty
-    if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"];
-    if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
+        }
 
-    await fetchModels();
-    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles();
-    
-    if (state.settings.locMode === 'gps') requestLocation();
-};
+        // NEW: Cloudflare KV Sync (Pull)
+        if (state.settings.syncSecret) {
+        try {
+            const res = await fetch("/api/config?secret=" + encodeURIComponent(state.settings.syncSecret));
+            if (res.ok) {
+                const remote = await res.json();
+                if (remote && remote.promptDay) {
+                    Object.assign(state.settings, remote);
+                    localStorage.setItem('lumina_v1.9.9', JSON.stringify(state.settings)); 
+                }
+            }
+        } catch(e) { console.error("KV Pull failed", e); }
+        }
 
-function save() { localStorage.setItem('lumina_v1.9.9', JSON.stringify(state.settings)); }
+        // Ensure critical defaults exist if cache was empty
+        if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"];
+        if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
 
+        await fetchModels();
+        setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles();
+
+        if (state.settings.locMode === 'gps') requestLocation();
+        };
+
+        async function save() { 
+        localStorage.setItem('lumina_v1.9.9', JSON.stringify(state.settings)); 
+        if (state.settings.syncSecret) {
+        try {
+            await fetch("/api/config", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-Lumina-Secret": state.settings.syncSecret 
+                },
+                body: JSON.stringify(state.settings)
+            });
+        } catch(e) { console.error("KV Sync failed", e); }
+        }
+        }
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
     state.importType = type;

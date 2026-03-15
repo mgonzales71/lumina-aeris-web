@@ -1,14 +1,20 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "lumina-aeris-web",
-  "compatibility_date": "2025-09-27",
-  "observability": {
-    "enabled": true
-  },
-  "assets": {
-    "directory": "public"
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "lumina-aeris-web",
+	"compatibility_date": "2025-09-27",
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": "public"
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"kv_namespaces": [
+		{
+			"binding": "LUMINA_SETTINGS",
+			"id": "70354407a1f14d98a37506c6138714ff"
+		}
+	]
 }

@@ -15,7 +15,7 @@ var state = {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
         quality: "medium", model: "gptimage", textModel: "openai", style: "Hyper photo realistic", resolution: "1290x2796",
-        overlayLabel: false, apiKey: "", locMode: "gps", customCity: "Portland, Oregon",
+        overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", customCity: "Portland, Oregon",
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
         styles: DEFAULT_STYLES,
@@ -42,6 +42,20 @@ window.onload = async () => {
             } catch(e) {} 
         }
     }
+
+    // NEW: Cloudflare KV Sync (Pull)
+    if (state.settings.syncSecret) {
+        try {
+            const res = await fetch("/api/config?secret=" + encodeURIComponent(state.settings.syncSecret));
+            if (res.ok) {
+                const remote = await res.json();
+                if (remote && remote.promptDay) { // Validation check
+                    Object.assign(state.settings, remote);
+                    localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); 
+                }
+            }
+        } catch(e) { console.error("KV Pull failed", e); }
+    }
     
     // Ensure critical structures exist
     if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = DEFAULT_STYLES;
@@ -61,7 +75,21 @@ window.onload = async () => {
     else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx !== undefined ? state.settings.customLocIdx : 0);
 };
 
-function save() { localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); }
+async function save() { 
+    localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); 
+    if (state.settings.syncSecret) {
+        try {
+            await fetch("/api/config", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-Lumina-Secret": state.settings.syncSecret 
+                },
+                body: JSON.stringify(state.settings)
+            });
+        } catch(e) { console.error("KV Sync failed", e); }
+    }
+}
 
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
@@ -164,6 +192,7 @@ function setupUI() {
     document.getElementById('set-res').value = state.settings.resolution;
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
     document.getElementById('set-apikey').value = state.settings.apiKey;
+    if (document.getElementById('set-sync-secret')) document.getElementById('set-sync-secret').value = state.settings.syncSecret || "";
     document.getElementById('set-loc-mode').value = state.settings.locMode;
     document.getElementById('set-transparent').checked = state.settings.transparent;
     document.getElementById('set-safe').checked = state.settings.safe;
@@ -217,6 +246,7 @@ function syncSettings() {
     state.settings.style = document.getElementById('set-style').value;
     state.settings.overlayLabel = document.getElementById('set-overlay').checked;
     state.settings.apiKey = document.getElementById('set-apikey').value;
+    if (document.getElementById('set-sync-secret')) state.settings.syncSecret = document.getElementById('set-sync-secret').value;
     state.settings.locMode = document.getElementById('set-loc-mode').value;
     state.settings.transparent = document.getElementById('set-transparent').checked;
     state.settings.safe = document.getElementById('set-safe').checked;

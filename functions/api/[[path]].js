@@ -131,15 +131,83 @@ export async function onRequest(context) {
             return new Response(JSON.stringify(await res.json()), { headers: { "Content-Type": "application/json" } });
         }
 
-        // --- 5. Shortcut Context API ---
+        // --- NEW: KV Config Management ---
+        if (path === "/api/config") {
+            const secret = request.headers.get("X-Lumina-Secret") || url.searchParams.get("secret");
+            if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401 });
+
+            if (request.method === "POST") {
+                try {
+                    const body = await request.json();
+                    await env.LUMINA_SETTINGS.put("settings", JSON.stringify(body));
+                    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+                } catch(e) { return new Response(e.message, { status: 500 }); }
+            } else {
+                const config = await env.LUMINA_SETTINGS.get("settings");
+                return new Response(config || "{}", { headers: { "Content-Type": "application/json" } });
+            }
+        }
+
+        // --- 5. Shortcut Context API (The "Brain" for iOS) ---
         if (path === "/api/context") {
             const secret = url.searchParams.get("secret");
             if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401 });
+
+            // Load Global Settings from KV
+            const kvConfigRaw = await env.LUMINA_SETTINGS.get("settings");
+            const config = kvConfigRaw ? JSON.parse(kvConfigRaw) : { 
+                promptDay: SHARED_DEFAULT_DAY, promptNight: SHARED_DEFAULT_NIGHT,
+                promptPOIDomestic: SHARED_DEFAULT_POI_DOMESTIC, promptPOIIntl: SHARED_DEFAULT_POI_INTL,
+                textModel: "openai", model: "gptimage", apiKey: ""
+            };
+
             const lat = url.searchParams.get("lat") || 45.52;
             const lon = url.searchParams.get("lon") || -122.67;
             const city = url.searchParams.get("city") || "Unknown";
-            const key = url.searchParams.get("key") || "";
-            const model = url.searchParams.get("model") || "gptimage";
+            const state_region = url.searchParams.get("state") || "";
+            const country = url.searchParams.get("country") || "";
+            const cityKey = `poi:${city.toLowerCase().trim()}`;
+
+            // Check KV for cached POIs
+            let poiListRaw = await env.LUMINA_SETTINGS.get(cityKey);
+            let pois = poiListRaw ? JSON.parse(poiListRaw) : [];
+
+            // If no POIs cached, run Discovery
+            if (pois.length === 0) {
+                const isUS = country.toLowerCase().includes("usa") || country.toLowerCase().includes("united states");
+                let discPrompt = isUS ? (config.promptPOIDomestic || SHARED_DEFAULT_POI_DOMESTIC) : (config.promptPOIIntl || SHARED_DEFAULT_POI_INTL);
+                discPrompt = discPrompt.split("{city}").join(city).split("{state_region}").join(state_region).split("{country}").join(country);
+
+                try {
+                    const discPayload = {
+                        messages: [
+                            { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
+                            { role: "user", content: discPrompt }
+                        ],
+                        model: config.textModel || "openai",
+                        jsonMode: true
+                    };
+                    const discRes = await fetch("https://text.pollinations.ai/", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(discPayload)
+                    });
+                    const discText = await discRes.text();
+                    const cleanDisc = discText.split("```json").join("").split("```").join("").trim();
+                    const discoveredData = JSON.parse(cleanDisc);
+                    pois = Array.isArray(discoveredData) ? discoveredData : [discoveredData];
+                    
+                    // Save to KV for next time
+                    await env.LUMINA_SETTINGS.put(cityKey, JSON.stringify(pois));
+                } catch(e) { 
+                    pois = [{ name: city, description: "A beautiful local landmark." }];
+                }
+            }
+
+            // Pick a random POI
+            const poi = pois[Math.floor(Math.random() * pois.length)];
+
+            // Weather & Astro
             const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,visibility,cloud_cover,wind_speed_10m&daily=uv_index_max&timezone=auto`);
             const d = await weatherRes.json();
             const dateStr = new Date().toISOString().split('T')[0];
@@ -155,27 +223,34 @@ export async function onRequest(context) {
                 if (data.sundata) data.sundata.forEach(s => { if(s.phen=="Rise") astro.sunrise=s.time; if(s.phen=="Set") astro.sunset=s.time; });
                 if (data.moondata) data.moondata.forEach(m => { if(m.phen=="Rise") astro.moonrise=m.time; if(m.phen=="Set") astro.moonset=m.time; });
             } catch(e) {}
-            const poiRes = await fetch(`https://gen.pollinations.ai/text/${encodeURIComponent("One famous landmark in " + city + ". Output JSON: {\"name\":\"...\",\"description\":\"...\"}")}?model=openai&system=Output%20JSON%20only${key ? "&key="+key : ""}`);
-            let poi = { name: city, description: "A beautiful view" };
-            try { 
-                const poiText = await poiRes.text();
-                const cleanPoi = poiText.split("```json").join("").split("```").join("").trim();
-                poi = JSON.parse(cleanPoi); 
-            } catch(e) {}
+
             const isDay = d.current.is_day === 1;
+            const theme = "General"; 
+            
             const vars = {
-                "{poi_name}": poi.name, "{poi_desc}": poi.description || "", "{city}": city, "{state_region}": "", "{country}": "",
+                "{poi_name}": poi.name, "{poi_desc}": poi.description || "", "{city}": city, "{state_region}": state_region, "{country}": country,
                 "{time_of_day}": isDay ? "Daytime" : "Nighttime", "{datetime}": new Date().toLocaleString(),
-                "{weather}": WMO_MAP[d.current.weather_code] || "Clear", "{temperature}": Math.round(d.current.temperature_2m * 9/5 + 32) + "°F", "{theme}": "General",
+                "{weather}": WMO_MAP[d.current.weather_code] || "Clear", "{temperature}": Math.round(d.current.temperature_2m * 9/5 + 32) + "°F", "{theme}": theme,
                 "{sunrise}": astro.sunrise, "{sunset}": astro.sunset, "{uv_index}": d.daily.uv_index_max[0], "{visibility}": (d.current.visibility / 1609).toFixed(1) + "mi",
                 "{cloud_cover}": d.current.cloud_cover + "%", "{wind_speed}": d.current.wind_speed_10m + "mph",
-                "{moon_phase}": astro.moon, "{moon_illumination}": astro.moon_illumination + " percent", "{moonrise}": astro.moonrise, "{moonset}": astro.moonset, "{style}": "Hyper Realistic"
+                "{moon_phase}": astro.moon, "{moon_illumination}": astro.moon_illumination + " percent", "{moonrise}": astro.moonrise, "{moonset}": astro.moonset, "{style}": config.style || "Hyper photo realistic"
             };
-            let p = isDay ? SHARED_DEFAULT_DAY : SHARED_DEFAULT_NIGHT;
+
+            let p = isDay ? (config.promptDay || SHARED_DEFAULT_DAY) : (config.promptNight || SHARED_DEFAULT_NIGHT);
             for (const [k, v] of Object.entries(vars)) { p = p.split(k).join(v || ""); }
             const cleanP = workerSanitize(p) || `Beautiful cinematic wallpaper of ${poi.name}`;
-            const finalImgUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanP)}?model=${model}&width=1290&height=2796&nologo=true${key ? "&key="+key : ""}`;
-            return new Response(JSON.stringify({ imageUrl: finalImgUrl, poiLabel: poi.name, prompt: cleanP }), { headers: { "Content-Type": "application/json" } });
+            
+            const [w, h] = (config.resolution || "1290x2796").split('x');
+            let finalImgUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanP)}?model=${config.model || "gptimage"}&width=${w}&height=${h}&nologo=true`;
+            if (config.apiKey) finalImgUrl += `&key=${config.apiKey}`;
+            
+            return new Response(JSON.stringify({ 
+                imageUrl: finalImgUrl, 
+                poiLabel: poi.name, 
+                prompt: cleanP,
+                city: city,
+                discovered: pois.length > 0
+            }), { headers: { "Content-Type": "application/json" } });
         }
         return new Response("Not Found", { status: 404 });
     } catch (err) {
