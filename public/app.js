@@ -1,13 +1,12 @@
-// Lumina Aeris Web & Worker - App Logic v1.10.12
+// Lumina Aeris Web & Worker - App Logic v1.10.18
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_POI_DOMESTIC_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
 const DEFAULT_POI_INTL_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {country}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
 const TOKENS_LIST = ["{style}", "{poi_name}", "{poi_desc}", "{city}", "{state_region}", "{country}", "{time_of_day}", "{datetime}", "{weather}", "{temperature}", "{theme}", "{moon_phase}", "{moon_illumination}", "{moonrise}", "{moonset}", "{sunrise}", "{sunset}", "{uv_index}", "{visibility}", "{cloud_cover}", "{wind_speed}"];
-const DEFAULT_STYLES = ["Hyper photo realistic", "Cinematic photography", "Watercolor painting", "Oil painting", "Pencil sketch", "Crayon drawing", "Claymation", "3D animation render", "Pixar-style 3D illustration", "Flat vector illustration", "Paper craft collage", "Ukiyo-e woodblock print", "Impressionist painting", "Pixel art", "Neon noir", "Vintage film photograph", "Comic book art", "Stained glass illustration"];
 
-var state = {
+let state = {
     currentTab: 'home', isGenerating: false,
     lat: 45.52, lon: -122.67, city: "Portland", state: "Oregon", country: "USA",
     importType: '',
@@ -15,26 +14,24 @@ var state = {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
         quality: "medium", model: "gptimage", textModel: "gemini-search", style: "Hyper photo realistic", resolution: "1290x2796",
-        overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", customCity: "Portland, Oregon",
+        overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", locations: [], customLocIdx: 0,
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
-        poiCache: {}, profiles: [],
-        styles: DEFAULT_STYLES,
-        locations: [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}],
-        customLocIdx: 0,
+        poiCache: {}, styles: ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"],
         transparent: false, safe: true, enhance: false, seedEnable: false, seed: 0, negativePrompt: "", negEnable: false
     }
 };
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.12');
+    // Attempt to load settings
+    const saved = localStorage.getItem('lumina_v1.10.18');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
+        const old = localStorage.getItem('lumina_v1.10.12') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -43,48 +40,39 @@ window.onload = async () => {
         }
     }
 
-    // NEW: Cloudflare KV Sync (Pull)
+    // Cloudflare KV Sync (Pull)
     if (state.settings.syncSecret) {
         try {
             const res = await fetch("/api/config?secret=" + encodeURIComponent(state.settings.syncSecret));
             if (res.ok) {
                 const remote = await res.json();
-                if (remote && remote.promptDay) { // Validation check
+                if (remote && remote.promptDay) {
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.10.18', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
     }
-    
-    // Ensure critical structures exist
-    if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = DEFAULT_STYLES;
-    
-    // Validate current style
-    if (!state.settings.style || !state.settings.styles.includes(state.settings.style)) {
-        state.settings.style = state.settings.styles[0] || "Hyper photo realistic";
-    }
 
+    // Ensure critical defaults exist
+    if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = ["Hyper photo realistic", "Cinematic photography", "Oil painting", "Anime art", "Cyberpunk", "Architectural drawing"];
     if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
-    if(!state.settings.locations) state.settings.locations = [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}];
+    if(!state.settings.locations) state.settings.locations = [];
 
     await fetchModels();
-    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles(); renderLocations();
-    
+    setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
+
     if (state.settings.locMode === 'gps') requestLocation();
-    else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx !== undefined ? state.settings.customLocIdx : 0);
+    else if (state.settings.locations.length > 0) applySavedLoc(state.settings.customLocIdx);
 };
 
 async function save() { 
-    localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.10.18', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "X-Lumina-Secret": state.settings.syncSecret 
-                },
+                headers: { "Content-Type": "application/json", "X-Lumina-Secret": state.settings.syncSecret },
                 body: JSON.stringify(state.settings)
             });
         } catch(e) { console.error("KV Sync failed", e); }
@@ -104,46 +92,20 @@ function confirmImport() {
     let raw = document.getElementById('import-text').value;
     if (!raw) return closeImport();
     try {
-        const startBrace = raw.indexOf('{');
-        const startBracket = raw.indexOf('[');
-        let start = -1;
-        if (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) start = startBrace;
-        else start = startBracket;
-
-        const endBrace = raw.lastIndexOf('}');
-        const endBracket = raw.lastIndexOf(']');
-        let end = -1;
-        if (endBrace !== -1 && (endBracket === -1 || endBrace > endBracket)) end = endBrace;
-        else end = endBracket;
-        
-        if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
-        
-        let cleaned = raw.substring(start, end + 1);
-        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
-                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "")
-                         .replace(/\r\n/g, "\n"); 
-
-        cleaned = cleaned.replace(/":\s*"([\s\S]*?)"\s*([,}])/g, (match, content, suffix) => {
-            let repaired = content.replace(/(?<!\\)"/g, '\\"');
-            repaired = repaired.replace(/\n/g, "\\n");
-            return '": "' + repaired + '"' + suffix;
-        });
-
-        cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
-        
+        let start = raw.indexOf('{'); if (start === -1) start = raw.indexOf('[');
+        let end = raw.lastIndexOf('}'); if (end === -1) end = raw.lastIndexOf(']');
+        if (start === -1 || end === -1) throw new Error("Could not find JSON data in paste.");
+        let cleaned = raw.substring(start, end + 1).replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
         const parsed = JSON.parse(cleaned);
-        
         if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
         else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
-        else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
         else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
+        else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
             state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; 
             loadEditorPrompt(); 
         }
-        
         save(); alert("Import successful!"); closeImport();
     } catch(e) { alert("Import failed: " + e.message); }
 }
@@ -162,10 +124,7 @@ async function fetchModels() {
             });
             sel.value = state.settings.model || "gptimage";
         }
-    } catch(e) {
-        const sel = document.getElementById('set-model');
-        if(sel) sel.innerHTML = '<option value="gptimage">GPT Image</option><option value="flux">Flux</option>';
-    }
+    } catch(e) {}
 
     try {
         const txtRes = await fetch('https://gen.pollinations.ai/text/models');
@@ -180,18 +139,15 @@ async function fetchModels() {
             });
             tsel.value = state.settings.textModel || "gemini-search";
         }
-    } catch(e) {
-        const tsel = document.getElementById('set-text-model');
-        if(tsel) tsel.innerHTML = '<option value="gemini-search">Gemini Search</option>';
-    }
+    } catch(e) {}
 }
+
 function setupUI() {
     loadEditorPrompt();
     document.getElementById('set-quality').value = state.settings.quality;
-    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "gemini-search";
     document.getElementById('set-res').value = state.settings.resolution;
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
-    document.getElementById('set-apikey').value = state.settings.apiKey;
+    document.getElementById('set-apikey').value = state.settings.apiKey || "";
     if (document.getElementById('set-sync-secret')) document.getElementById('set-sync-secret').value = state.settings.syncSecret || "";
     document.getElementById('set-loc-mode').value = state.settings.locMode;
     document.getElementById('set-transparent').checked = state.settings.transparent;
@@ -205,12 +161,10 @@ function setupUI() {
 }
 
 function renderTokens() {
-    const chipContainer = document.getElementById('token-chips');
-    if(!chipContainer) return;
+    const chipContainer = document.getElementById('token-chips'); if(!chipContainer) return;
     chipContainer.innerHTML = "";
     TOKENS_LIST.forEach(t => {
-        const c = document.createElement('div');
-        c.className = 'chip'; c.innerText = t;
+        const c = document.createElement('div'); c.className = 'chip'; c.innerText = t;
         c.onclick = () => {
             const area = document.getElementById('prompt-editor');
             const start = area.selectionStart; const end = area.selectionEnd;
@@ -224,8 +178,8 @@ function loadEditorPrompt() {
     const mode = document.getElementById('prompt-mode').value;
     if (mode === 'day') document.getElementById('prompt-editor').value = state.settings.promptDay;
     else if (mode === 'night') document.getElementById('prompt-editor').value = state.settings.promptNight;
-    else if (mode === 'poidomestic') document.getElementById('prompt-editor').value = state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR;
-    else if (mode === 'poiintl') document.getElementById('prompt-editor').value = state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR;
+    else if (mode === 'poidomestic') document.getElementById('prompt-editor').value = state.settings.promptPOIDomestic;
+    else if (mode === 'poiintl') document.getElementById('prompt-editor').value = state.settings.promptPOIIntl;
 }
 
 function saveEditorPrompt() {
@@ -687,5 +641,5 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.12'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.18'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR; state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR; loadEditorPrompt(); save(); } }

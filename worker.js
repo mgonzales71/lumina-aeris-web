@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Management Suite v1.10.12
+// Lumina Aeris Web & Worker - Management Suite v1.10.18
 // FULL VERSION - 100% COMPLETE - NO PLACEHOLDERS.
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
@@ -149,6 +149,7 @@ const HTML_CONTENT = `
 
 <header>
     <h1 id="header-title">Lumina Aeris</h1>
+    <div style="font-size: 9px; opacity: 0.4; font-weight: bold; letter-spacing: 1px; margin-top: 2px;">V1.10.18</div>
 </header>
 
 <div id="home-view" class="view active container">
@@ -234,6 +235,7 @@ const HTML_CONTENT = `
     <div class="group" id="profile-list"></div>
     <div class="group" style="padding: 12px;"><input type="text" id="new-profile-name" placeholder="New Profile Name" style="width: 100%; text-align: left; color: #fff; margin-bottom: 10px;"><button onclick="saveProfile()" class="btn btn-secondary">Save Current Config</button></div>
     <button onclick="resetApp()" class="btn btn-danger">Wipe All App Data</button>
+    <div style="text-align: center; margin-top: 30px; opacity: 0.3; font-size: 10px; font-weight: bold; letter-spacing: 2px;">V1.10.18</div>
 </div>
 
 <nav class="tab-bar">
@@ -272,7 +274,7 @@ var state = {
         // --- 2. INITIALIZATION ---
         window.onload = async () => {
         // Attempt to load settings
-        const saved = localStorage.getItem('lumina_v1.10.12');
+        const saved = localStorage.getItem('lumina_v1.10.18');
         if (saved) {
         try {
             const parsed = JSON.parse(saved);
@@ -280,7 +282,7 @@ var state = {
         } catch(e) { console.error("Save load error", e); }
         } else {
         // Fallback to previous versions if needed
-        const old = localStorage.getItem('lumina_v1.9.8') || localStorage.getItem('lumina_v1.9.7') || localStorage.getItem('lumina_v1.9.6');
+        const old = localStorage.getItem('lumina_v1.10.12') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4');
         if (old) {
             try {
                 Object.assign(state.settings, JSON.parse(old));
@@ -297,7 +299,7 @@ var state = {
                 const remote = await res.json();
                 if (remote && remote.promptDay) {
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.10.18', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
@@ -314,7 +316,7 @@ var state = {
         };
 
         async function save() { 
-        localStorage.setItem('lumina_v1.10.12', JSON.stringify(state.settings)); 
+        localStorage.setItem('lumina_v1.10.18', JSON.stringify(state.settings)); 
         if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {
@@ -845,7 +847,7 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.9.7'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.18'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR; state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR; loadEditorPrompt(); save(); } }
 </script>
 </body>
