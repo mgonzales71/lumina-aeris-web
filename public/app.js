@@ -175,6 +175,7 @@ function syncSettings() {
     state.settings.quality = document.getElementById('set-quality').value;
     state.settings.model = document.getElementById('set-model').value;
     state.settings.resolution = document.getElementById('set-res').value;
+    state.settings.style = document.getElementById('set-style').value;
     state.settings.overlayLabel = document.getElementById('set-overlay').checked;
     state.settings.apiKey = document.getElementById('set-apikey').value;
     state.settings.locMode = document.getElementById('set-loc-mode').value;
@@ -216,6 +217,72 @@ function applySavedLoc() {
     save();
 }
 
+// --- LOCATION MODAL ---
+function openLocationModal() {
+    document.getElementById('modal-loc-city').value = "";
+    document.getElementById('modal-loc-state').value = "";
+    document.getElementById('modal-loc-country').value = "";
+    document.getElementById('modal-loc-lat').value = "";
+    document.getElementById('modal-loc-lon').value = "";
+    document.getElementById('loc-modal').style.display = 'flex';
+}
+function closeLocationModal() { document.getElementById('loc-modal').style.display = 'none'; }
+
+async function autofillLocation() {
+    const city = document.getElementById('modal-loc-city').value;
+    const stateVal = document.getElementById('modal-loc-state').value;
+    const country = document.getElementById('modal-loc-country').value;
+    if (!city) return alert("Enter at least a city name");
+    
+    const btn = document.getElementById('btn-loc-autofill');
+    btn.disabled = true; btn.innerText = "Finding...";
+    
+    try {
+        let q = city;
+        if (stateVal) q += ", " + stateVal;
+        if (country) q += ", " + country;
+        
+        const res = await fetch("/api/proxy/nominatim?lat=0&lon=0&q=" + encodeURIComponent(q));
+        const data = await res.json();
+        if (data && data.length > 0) {
+            const top = data[0];
+            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4);
+            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4);
+            
+            // Re-fetch with addressdetails=1 for better parsing if available
+            const detailRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat="+top.lat+"&lon="+top.lon+"&addressdetails=1");
+            const detail = await detailRes.json();
+            if (detail.address) {
+                document.getElementById('modal-loc-city').value = detail.address.city || detail.address.town || detail.address.village || city;
+                document.getElementById('modal-loc-state').value = detail.address.state || stateVal || "";
+                document.getElementById('modal-loc-country').value = detail.address.country || country || "";
+            }
+        } else {
+            alert("No results found for " + q);
+        }
+    } catch(e) {
+        alert("Autofill error: " + e.message);
+    } finally {
+        btn.disabled = false; btn.innerText = "✨ AI Autofill";
+    }
+}
+
+function saveLocationModal() {
+    const city = document.getElementById('modal-loc-city').value;
+    const lat = parseFloat(document.getElementById('modal-loc-lat').value);
+    const lon = parseFloat(document.getElementById('modal-loc-lon').value);
+    if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon are required");
+    
+    state.settings.locations.push({
+        city: city,
+        state: document.getElementById('modal-loc-state').value,
+        country: document.getElementById('modal-loc-country').value,
+        lat: lat,
+        lon: lon
+    });
+    renderLocations(); save(); closeLocationModal();
+}
+
 function renderLocations() {
     const list = document.getElementById('location-list');
     if(!list) return;
@@ -228,17 +295,6 @@ function renderLocations() {
     renderPOISelectors(); 
 }
 
-function addLocationPrompt() {
-    const city = prompt("City Name:"); if (!city) return;
-    const stateVal = prompt("State/Region (Optional):");
-    const country = prompt("Country (e.g. USA):");
-    const lat = prompt("Latitude:");
-    const lon = prompt("Longitude:");
-    if (city && lat && lon) {
-        state.settings.locations.push({city, state: stateVal, country, lat: parseFloat(lat), lon: parseFloat(lon)});
-        renderLocations(); save();
-    }
-}
 function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); save(); }
 
 function exportData(type) {
@@ -319,59 +375,6 @@ function deleteCity() {
     const city = document.getElementById('poi-city-select').value;
     if (!city || !confirm("Delete all for " + city.toUpperCase() + "?")) return;
     delete state.settings.poiCache[city]; renderPOISelectors(); save();
-}
-
-// --- LOCATION MODAL ---
-function openLocationModal() {
-    document.getElementById('modal-loc-city').value = "";
-    document.getElementById('modal-loc-state').value = "";
-    document.getElementById('modal-loc-country').value = "";
-    document.getElementById('modal-loc-lat').value = "";
-    document.getElementById('modal-loc-lon').value = "";
-    document.getElementById('loc-modal').style.display = 'flex';
-}
-function closeLocationModal() { document.getElementById('loc-modal').style.display = 'none'; }
-
-async function autofillLocation() {
-    const city = document.getElementById('modal-loc-city').value;
-    if (!city || city.length < 3) return alert("Enter a city name first");
-    const btn = document.getElementById('btn-loc-autofill');
-    btn.disabled = true; btn.innerText = "Finding...";
-    try {
-        const res = await fetch("/api/proxy/nominatim?lat=0&lon=0&q=" + encodeURIComponent(city));
-        const data = await res.json();
-        if (data && data.length > 0) {
-            const top = data[0];
-            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4);
-            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4);
-            // Try to extract state/country from display_name
-            const parts = top.display_name.split(',');
-            if (parts.length > 1) document.getElementById('modal-loc-state').value = parts[1].trim();
-            if (parts.length > 2) document.getElementById('modal-loc-country').value = parts[parts.length-1].trim();
-        } else {
-            alert("No results found for " + city);
-        }
-    } catch(e) {
-        alert("Autofill error: " + e.message);
-    } finally {
-        btn.disabled = false; btn.innerText = "✨ AI Autofill";
-    }
-}
-
-function saveLocationModal() {
-    const city = document.getElementById('modal-loc-city').value;
-    const lat = parseFloat(document.getElementById('modal-loc-lat').value);
-    const lon = parseFloat(document.getElementById('modal-loc-lon').value);
-    if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon are required");
-    
-    state.settings.locations.push({
-        city: city,
-        state: document.getElementById('modal-loc-state').value,
-        country: document.getElementById('modal-loc-country').value,
-        lat: lat,
-        lon: lon
-    });
-    renderLocations(); save(); closeLocationModal();
 }
 
 function openPOIModal() {
