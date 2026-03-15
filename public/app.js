@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - App Logic v1.10.6
+// Lumina Aeris Web & Worker - App Logic v1.10.7
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
@@ -17,20 +17,21 @@ var state = {
         poiCache: {}, profiles: [],
         styles: DEFAULT_STYLES,
         locations: [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}],
+        customLocIdx: 0,
         transparent: false, safe: true, enhance: false, seedEnable: false, seed: 0, negativePrompt: "", negEnable: false
     }
 };
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.6');
+    const saved = localStorage.getItem('lumina_v1.10.7');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3') || localStorage.getItem('lumina_v1.10.2');
+        const old = localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -54,9 +55,10 @@ window.onload = async () => {
     setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles(); renderLocations();
     
     if (state.settings.locMode === 'gps') requestLocation();
+    else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx !== undefined ? state.settings.customLocIdx : 0);
 };
 
-function save() { localStorage.setItem('lumina_v1.10.6', JSON.stringify(state.settings)); }
+function save() { localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); }
 
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
@@ -214,12 +216,20 @@ function renderCustomLocList() {
         opt.value = i; opt.innerText = loc.city + (loc.state ? ", " + loc.state : "");
         sel.appendChild(opt);
     });
+    if (state.settings.customLocIdx !== undefined) sel.value = state.settings.customLocIdx;
 }
 
-function applySavedLoc() {
-    const idx = document.getElementById('set-custom-loc').value;
-    if (idx === "") return;
+function applySavedLoc(forceIdx) {
+    const sel = document.getElementById('set-custom-loc');
+    let idx = forceIdx !== undefined ? forceIdx : (sel ? sel.value : "");
+    if (idx === "" || idx === null) return;
+    
+    state.settings.customLocIdx = parseInt(idx);
+    if (sel && sel.value !== idx) sel.value = idx;
+    
     const loc = state.settings.locations[idx];
+    if (!loc) return;
+    
     state.lat = loc.lat; state.lon = loc.lon;
     state.city = loc.city; state.state = loc.state || ""; state.country = loc.country || "";
     document.getElementById('coord-text').innerText = "SAVED: " + state.lat.toFixed(2);
@@ -473,6 +483,14 @@ async function handleGenerate() {
         const poi = pois[Math.floor(Math.random() * pois.length)]; const theme = getThemeForDate();
         btn.innerText = "Dreaming..."; const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
+        
+        if (cleanP.length > 1500) {
+            alert("Your prompt is too long (" + cleanP.length + " chars). Please reduce the length of your custom styles or themes to prevent server errors.");
+            btn.disabled = false; state.isGenerating = false; stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
+            btn.innerText = "✨ AI Discover";
+            return;
+        }
+
         const [w, h] = state.settings.resolution.split('x'); const seed = state.settings.seedEnable ? state.settings.seed : Math.floor(Math.random()*999999);
         let url = "https://gen.pollinations.ai/image/" + encodeURIComponent(cleanP) + "?width=" + w + "&height=" + h + "&seed=" + seed + "&model=" + state.settings.model + "&nologo=true";
         if (state.settings.apiKey) url += "&key=" + state.settings.apiKey;
@@ -480,22 +498,37 @@ async function handleGenerate() {
         if (state.settings.safe === false) url += "&safe=false";
         if (state.settings.enhance) url += "&enhance=true";
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
-        const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = url;
-        img.onload = () => {
-            img.classList.add('loaded'); stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
-            document.getElementById('placeholder').style.display = 'none';
-            if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
-            else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
-            document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
-        };
-    } catch(e) { alert("Error: " + e.message); btn.disabled = false; state.isGenerating = false; stopFireflies(); }
+        
+        try {
+            const imgRes = await fetch(url);
+            if (!imgRes.ok) throw new Error("Server error " + imgRes.status);
+            const blob = await imgRes.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            
+            const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = objectUrl;
+            img.onload = () => {
+                img.classList.add('loaded'); stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
+                document.getElementById('placeholder').style.display = 'none';
+                if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
+                else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
+                document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
+            };
+        } catch (fetchErr) {
+            throw new Error("Image load failed. If your prompt is very complex, try simplifying it. (" + fetchErr.message + ")");
+        }
+    } catch(e) { alert("Error: " + e.message); const btn = document.getElementById('btn-gen-ui'); if (btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } state.isGenerating = false; stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active'); }
 }
 
 function buildPrompt(env, poi, theme) {
-    const isDay = env.is_day; let p = isDay ? state.settings.promptDay : state.settings.promptNight;
+    const isDay = env.is_day; 
+    let p = isDay ? state.settings.promptDay : state.settings.promptNight;
     const now = new Date();
+    
+    // Safety: ensure style is valid
+    const currentStyle = state.settings.styles.includes(state.settings.style) ? state.settings.style : state.settings.styles[0];
+
     const vars = {
-        "{style}": state.settings.style, "{poi_name}": poi.name, "{poi_desc}": poi.description || "",
+        "{style}": currentStyle, "{poi_name}": poi.name, "{poi_desc}": poi.description || "",
         "{city}": state.city, "{state_region}": state.state, "{country}": state.country,
         "{time_of_day}": isDay ? "Daytime" : "Nighttime", "{datetime}": now.toLocaleString(),
         "{weather}": env.weather_desc, "{temperature}": env.temp + "°F", "{theme}": theme,
@@ -508,6 +541,7 @@ function buildPrompt(env, poi, theme) {
     for (const [k, v] of Object.entries(vars)) { p = p.split(k).join(v || ""); }
     if (state.settings.quality === 'high') p += ", 8k resolution, masterpiece";
     if (state.settings.quality === 'hd') p += ", 16k resolution, cinematic lighting";
+    
     return p;
 }
 
@@ -578,5 +612,5 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.6'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.7'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }

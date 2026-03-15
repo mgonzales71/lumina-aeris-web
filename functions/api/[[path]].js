@@ -1,4 +1,4 @@
-// Lumina Aeris Web Backend - Functions v1.10.5
+// Lumina Aeris Web Backend - Functions v1.10.7
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 const WMO_MAP = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 61: "Rain", 71: "Snow", 95: "Thunderstorm" };
@@ -104,9 +104,7 @@ export async function onRequest(context) {
         if (path === "/api/proxy/nominatim") {
             const lat = url.searchParams.get("lat");
             const lon = url.searchParams.get("lon");
-            const q = url.searchParams.get("q");
-            let apiUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
-            if (q) apiUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+            const apiUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
             const res = await fetch(apiUrl, { headers: { "User-Agent": "LuminaAeris/1.0" } });
             return new Response(JSON.stringify(await res.json()), { headers: { "Content-Type": "application/json" } });
         }
