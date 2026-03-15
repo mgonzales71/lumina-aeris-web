@@ -34,7 +34,7 @@ window.onload = async () => {
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.12') || localStorage.getItem('lumina_v1.10.11') || localStorage.getItem('lumina_v1.10.10') || localStorage.getItem('lumina_v1.10.9') || localStorage.getItem('lumina_v1.10.8') || localStorage.getItem('lumina_v1.10.7') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
+        const old = localStorage.getItem('lumina_v1.10.15') || localStorage.getItem('lumina_v1.10.14') || localStorage.getItem('lumina_v1.10.13') || localStorage.getItem('lumina_v1.10.12') || localStorage.getItem('lumina_v1.10.11') || localStorage.getItem('lumina_v1.10.10') || localStorage.getItem('lumina_v1.10.9') || localStorage.getItem('lumina_v1.10.8') || localStorage.getItem('lumina_v1.10.7') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
