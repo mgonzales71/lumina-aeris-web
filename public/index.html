@@ -77,7 +77,7 @@
 
 <div id="prompts-view" class="view container">
     <div class="section-title">Mode Selection</div>
-    <div class="group"><div class="row"><span class="label">Editing Template</span><select id="prompt-mode" onchange="loadEditorPrompt()"><option value="day">Daytime Template</option><option value="night">Nighttime Template</option></select></div></div>
+    <div class="group"><div class="row"><span class="label">Editing Template</span><select id="prompt-mode" onchange="loadEditorPrompt()"><option value="day">Daytime Template</option><option value="night">Nighttime Template</option><option value="poidomestic">POI Query - Domestic</option><option value="poiintl">POI Query - International</option></select></div></div>
     <div class="section-title">Template Editor</div>
     <div class="group" style="padding: 10px;"><textarea id="prompt-editor" spellcheck="false" oninput="saveEditorPrompt()"></textarea><div class="chip-scroll" id="token-chips"></div></div>
     <div class="group"><div class="row"><span class="label">Bake POI Label</span><input type="checkbox" id="set-overlay" onchange="syncSettings()"></div></div>
@@ -130,6 +130,7 @@
     <div class="section-title">AI Configuration</div>
     <div class="group">
         <div class="row"><span class="label">Image Model</span><select id="set-model" onchange="syncSettings()"></select></div>
+        <div class="row"><span class="label">Text Model</span><select id="set-text-model" onchange="syncSettings()"></select></div>
         <div class="row"><span class="label">Quality</span><select id="set-quality" onchange="syncSettings()"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High (8K)</option><option value="hd">HD (16K)</option></select></div>
         <div class="row"><span class="label">Dimensions</span><select id="set-res" onchange="syncSettings()"><option value="1290x2796">iPhone (1290x2796)</option><option value="1024x1024">Square (1024x1024)</option><option value="1920x1080">Desktop (1920x1080)</option></select></div>
         <div class="row"><span class="label">Style</span><select id="set-style" onchange="syncSettings()"></select></div>

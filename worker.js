@@ -5,6 +5,8 @@
 // --- 1. SERVER-SIDE CONSTANTS (Shared with Client) ---
 const SHARED_DEFAULT_DAY = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const SHARED_DEFAULT_NIGHT = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
+const SHARED_DEFAULT_POI_DOMESTIC = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
+const SHARED_DEFAULT_POI_INTL = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {country}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
 const WMO_MAP = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 61: "Rain", 71: "Snow", 95: "Thunderstorm" };
 
 const HTML_CONTENT = `
@@ -171,7 +173,7 @@ const HTML_CONTENT = `
 
 <div id="prompts-view" class="view container">
     <div class="section-title">Mode Selection</div>
-    <div class="group"><div class="row"><span class="label">Editing Template</span><select id="prompt-mode" onchange="loadEditorPrompt()"><option value="day">Daytime Template</option><option value="night">Nighttime Template</option></select></div></div>
+    <div class="group"><div class="row"><span class="label">Editing Template</span><select id="prompt-mode" onchange="loadEditorPrompt()"><option value="day">Daytime Template</option><option value="night">Nighttime Template</option><option value="poidomestic">POI Query - Domestic</option><option value="poiintl">POI Query - International</option></select></div></div>
     <div class="section-title">Template Editor</div>
     <div class="group" style="padding: 10px;"><textarea id="prompt-editor" spellcheck="false" oninput="saveEditorPrompt()"></textarea><div class="chip-scroll" id="token-chips"></div></div>
     <div class="group"><div class="row"><span class="label">Bake POI Label</span><input type="checkbox" id="set-overlay" onchange="syncSettings()"></div></div>
@@ -204,6 +206,7 @@ const HTML_CONTENT = `
     <div class="section-title">AI Configuration</div>
     <div class="group">
         <div class="row"><span class="label">Image Model</span><select id="set-model" onchange="syncSettings()"></select></div>
+        <div class="row"><span class="label">Text Model</span><select id="set-text-model" onchange="syncSettings()"></select></div>
         <div class="row"><span class="label">Quality</span><select id="set-quality" onchange="syncSettings()"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High (8K)</option><option value="hd">HD (16K)</option></select></div>
         <div class="row"><span class="label">Dimensions</span><select id="set-res" onchange="syncSettings()"><option value="1290x2796">iPhone (1290x2796)</option><option value="1024x1024">Square (1024x1024)</option><option value="1920x1080">Desktop (1920x1080)</option></select></div>
         <div class="row"><span class="label">Style</span><select id="set-style" onchange="syncSettings()"></select></div>
@@ -245,6 +248,8 @@ const HTML_CONTENT = `
 // We inject server constants here as JSON strings to avoid template literal conflicts
 const DEFAULT_DAY_STR = ${JSON.stringify(SHARED_DEFAULT_DAY)};
 const DEFAULT_NIGHT_STR = ${JSON.stringify(SHARED_DEFAULT_NIGHT)};
+const DEFAULT_POI_DOMESTIC_STR = ${JSON.stringify(SHARED_DEFAULT_POI_DOMESTIC)};
+const DEFAULT_POI_INTL_STR = ${JSON.stringify(SHARED_DEFAULT_POI_INTL)};
 const TOKENS_LIST = ["{style}", "{poi_name}", "{poi_desc}", "{city}", "{state_region}", "{country}", "{time_of_day}", "{datetime}", "{weather}", "{temperature}", "{theme}", "{moon_phase}", "{moon_illumination}", "{moonrise}", "{moonset}", "{sunrise}", "{sunset}", "{uv_index}", "{visibility}", "{cloud_cover}", "{wind_speed}"];
 
 // Declare state at the top level so it is hoisted and available immediately
@@ -254,7 +259,8 @@ var state = {
     importType: '',
     settings: {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
-        quality: "medium", model: "gptimage", style: "Hyper photo realistic", resolution: "1290x2796",
+        promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
+        quality: "medium", model: "gptimage", textModel: "openai", style: "Hyper photo realistic", resolution: "1290x2796",
         overlayLabel: false, apiKey: "", locMode: "gps", customCity: "Portland, Oregon",
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
@@ -341,27 +347,47 @@ async function fetchModels() {
         const res = await fetch('https://gen.pollinations.ai/image/models');
         const models = await res.json();
         const sel = document.getElementById('set-model');
-        if (!sel) return;
-        sel.innerHTML = "";
-        models.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.name;
-            opt.innerText = m.name + (m.paid_only ? ' *' : '');
-            sel.appendChild(opt);
-        });
-        // Select current or default
-        sel.value = state.settings.model || "gptimage";
+        if (sel) {
+            sel.innerHTML = "";
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.innerText = m.name + (m.paid_only ? ' *' : '');
+                sel.appendChild(opt);
+            });
+            // Select current or default
+            sel.value = state.settings.model || "gptimage";
+        }
     } catch(e) {
         console.error("Model fetch failed", e);
         // Fallback if API fails
         const sel = document.getElementById('set-model'); 
         if(sel) sel.innerHTML = '<option value="gptimage">GPT Image</option><option value="flux">Flux</option>';
     }
+
+    try {
+        const txtRes = await fetch('https://text.pollinations.ai/models');
+        const txtModels = await txtRes.json();
+        const tsel = document.getElementById('set-text-model');
+        if (tsel) {
+            tsel.innerHTML = "";
+            txtModels.filter(m => !m.paid_only).forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name; opt.innerText = m.name;
+                tsel.appendChild(opt);
+            });
+            tsel.value = state.settings.textModel || "openai";
+        }
+    } catch(e) {
+        const tsel = document.getElementById('set-text-model');
+        if(tsel) tsel.innerHTML = '<option value="openai">OpenAI</option>';
+    }
 }
 
 function setupUI() {
     loadEditorPrompt();
     document.getElementById('set-quality').value = state.settings.quality;
+    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "openai";
     document.getElementById('set-res').value = state.settings.resolution;
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
     document.getElementById('set-apikey').value = state.settings.apiKey;
@@ -399,20 +425,26 @@ function renderTokens() {
 
 function loadEditorPrompt() {
     const mode = document.getElementById('prompt-mode').value;
-    document.getElementById('prompt-editor').value = mode === 'day' ? state.settings.promptDay : state.settings.promptNight;
+    if (mode === 'day') document.getElementById('prompt-editor').value = state.settings.promptDay;
+    else if (mode === 'night') document.getElementById('prompt-editor').value = state.settings.promptNight;
+    else if (mode === 'poidomestic') document.getElementById('prompt-editor').value = state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR;
+    else if (mode === 'poiintl') document.getElementById('prompt-editor').value = state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR;
 }
 
 function saveEditorPrompt() {
     const mode = document.getElementById('prompt-mode').value;
     const val = document.getElementById('prompt-editor').value;
     if (mode === 'day') state.settings.promptDay = val;
-    else state.settings.promptNight = val;
+    else if (mode === 'night') state.settings.promptNight = val;
+    else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
+    else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
     save();
 }
 
 function syncSettings() {
     state.settings.quality = document.getElementById('set-quality').value;
     state.settings.model = document.getElementById('set-model').value;
+    if (document.getElementById('set-text-model')) state.settings.textModel = document.getElementById('set-text-model').value;
     state.settings.resolution = document.getElementById('set-res').value;
     state.settings.overlayLabel = document.getElementById('set-overlay').checked;
     state.settings.apiKey = document.getElementById('set-apikey').value;
@@ -559,28 +591,38 @@ async function addPOIPrompt() {
     if (desc === "...") consultPOI(city, idx);
 }
 
-async function discoverPOIs() {
+async function discoverPOIs(btn) {
     const city = state.city;
-    const btn = event.currentTarget; 
-    if(btn && btn.id === 'btn-gen-ui') {
-        // Silent mode called by generate
-    } else if(btn) {
-        btn.disabled = true; btn.innerText = "Finding...";
-    }
-    
+    const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states");
+    let rawPrompt = isUS ? (state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR) : (state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR);
+    rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country);
+
+    if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = true; btn.innerText = "Finding..."; }
+
     try {
-        const res = await fetch("/api/proxy/poi?city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
-        const data = await res.json();
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || "openai", key: state.settings.apiKey };
+        const res = await fetch("/api/proxy/poi", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const textRes = await res.text();
+        const cleanJson = textRes.split("\`\`\`json").join("").split("\`\`\`").join("").trim();
+        const data = JSON.parse(cleanJson);
         const cityKey = city.toLowerCase().trim();
         if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = [];
-        state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
+
+        if (Array.isArray(data)) {
+            state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data];
+        } else if (data.name) {
+            state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
+        }
         renderPOISelectors(); save();
     } catch(e) {
-    } finally { 
-        if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = false; btn.innerText = "✨ AI Discover"; } 
+    } finally {
+        if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = false; btn.innerText = "✨ AI Discover"; }
     }
 }
-
 function openFullRes() {
     const src = document.getElementById('result-image').src;
     if (src) window.open(src, '_blank');
@@ -777,7 +819,7 @@ function saveProfile() {
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
 function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.9.7'); location.reload(); } }
-function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }
+function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR; state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR; loadEditorPrompt(); save(); } }
 </script>
 </body>
 </html>
@@ -836,13 +878,36 @@ export default {
             }
 
             if (url.pathname === "/api/proxy/poi") {
-                const city = url.searchParams.get("city"); const key = url.searchParams.get("key");
-                const promptStr = "Name one famous landmark in " + city + ". Output JSON: {\"name\": \"Name\", \"description\": \"Short 1 sentence description\"}";
-                const apiUrl = "https://gen.pollinations.ai/text/" + encodeURIComponent(promptStr) + "?model=openai&system=Output%20JSON%20only" + (key ? "&key="+key : "");
-                const res = await fetch(apiUrl);
+                let promptStr = "";
+                let model = "openai";
+                if (request.method === "POST") {
+                    try {
+                        const body = await request.json();
+                        promptStr = body.prompt || "";
+                        model = body.model || "openai";
+                    } catch(e) {}
+                } else {
+                    const city = url.searchParams.get("city");
+                    promptStr = `Name one famous landmark in ${city}. Output JSON: {"name": "Name", "description": "Short 1 sentence description"}`;
+                }
+
+                const payload = {
+                    messages: [
+                        { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
+                        { role: "user", content: promptStr }
+                    ],
+                    model: model,
+                    jsonMode: true
+                };
+                
+                const res = await fetch("https://text.pollinations.ai/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
                 const t = await res.text();
                 const clean = t.split("```json").join("").split("```").join("").trim();
-                return new Response(clean, { headers: { "Content-Type": "application/json" } });
+                return new Response(clean, { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
             }
 
             if (url.pathname === "/api/proxy/consult") {

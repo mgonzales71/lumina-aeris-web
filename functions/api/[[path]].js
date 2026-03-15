@@ -64,11 +64,33 @@ export async function onRequest(context) {
 
         // --- 2. POI Discovery Proxy ---
         if (path === "/api/proxy/poi") {
-            const city = url.searchParams.get("city");
-            const key = url.searchParams.get("key");
-            const promptStr = `Name one famous landmark in ${city}. Output JSON: {"name": "Name", "description": "Short 1 sentence description"}`;
-            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=openai&system=Output%20JSON%20only${key ? "&key="+key : ""}`;
-            const res = await fetch(apiUrl);
+            let promptStr = "";
+            let model = "openai";
+            if (request.method === "POST") {
+                try {
+                    const body = await request.json();
+                    promptStr = body.prompt || "";
+                    model = body.model || "openai";
+                } catch(e) {}
+            } else {
+                const city = url.searchParams.get("city");
+                promptStr = `Name one famous landmark in ${city}. Output JSON: {"name": "Name", "description": "Short 1 sentence description"}`;
+            }
+
+            const payload = {
+                messages: [
+                    { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
+                    { role: "user", content: promptStr }
+                ],
+                model: model,
+                jsonMode: true
+            };
+            
+            const res = await fetch("https://text.pollinations.ai/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
             const t = await res.text();
             const clean = t.split("```json").join("").split("```").join("").trim();
             return new Response(clean, { headers: { "Content-Type": "application/json" } });
