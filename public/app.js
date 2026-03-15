@@ -14,7 +14,7 @@ var state = {
     settings: {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
-        quality: "medium", model: "gptimage", textModel: "openai", style: "Hyper photo realistic", resolution: "1290x2796",
+        quality: "medium", model: "gptimage", textModel: "gemini-search", style: "Hyper photo realistic", resolution: "1290x2796",
         overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", customCity: "Portland, Oregon",
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
@@ -178,17 +178,17 @@ async function fetchModels() {
                 opt.value = m.name; opt.innerText = m.name;
                 tsel.appendChild(opt);
             });
-            tsel.value = state.settings.textModel || "openai";
+            tsel.value = state.settings.textModel || "gemini-search";
         }
     } catch(e) {
         const tsel = document.getElementById('set-text-model');
-        if(tsel) tsel.innerHTML = '<option value="openai">OpenAI</option>';
+        if(tsel) tsel.innerHTML = '<option value="gemini-search">Gemini Search</option>';
     }
 }
 function setupUI() {
     loadEditorPrompt();
     document.getElementById('set-quality').value = state.settings.quality;
-    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "openai";
+    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "gemini-search";
     document.getElementById('set-res').value = state.settings.resolution;
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
     document.getElementById('set-apikey').value = state.settings.apiKey;
@@ -508,7 +508,7 @@ async function discoverPOIs(btn) {
     
     if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = true; btn.innerText = "Finding..."; }
     try {
-        const payload = { prompt: rawPrompt, model: state.settings.textModel || "openai", key: state.settings.apiKey };
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey };
         const res = await fetch("/api/proxy/poi", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

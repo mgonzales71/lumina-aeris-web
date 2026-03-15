@@ -260,7 +260,7 @@ var state = {
     settings: {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
-        quality: "medium", model: "gptimage", textModel: "openai", style: "Hyper photo realistic", resolution: "1290x2796",
+        quality: "medium", model: "gptimage", textModel: "gemini-search", style: "Hyper photo realistic", resolution: "1290x2796",
         overlayLabel: false, apiKey: "", syncSecret: "", locMode: "gps", customCity: "Portland, Oregon",
         themes: [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}],
         poiCache: {}, profiles: [],
@@ -403,18 +403,18 @@ async function fetchModels() {
                 opt.value = m.name; opt.innerText = m.name;
                 tsel.appendChild(opt);
             });
-            tsel.value = state.settings.textModel || "openai";
+            tsel.value = state.settings.textModel || "gemini-search";
         }
     } catch(e) {
         const tsel = document.getElementById('set-text-model');
-        if(tsel) tsel.innerHTML = '<option value="openai">OpenAI</option>';
+        if(tsel) tsel.innerHTML = '<option value="gemini-search">Gemini Search</option>';
     }
 }
 
 function setupUI() {
     loadEditorPrompt();
     document.getElementById('set-quality').value = state.settings.quality;
-    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "openai";
+    if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "gemini-search";
     document.getElementById('set-res').value = state.settings.resolution;
     document.getElementById('set-overlay').checked = state.settings.overlayLabel;
     document.getElementById('set-apikey').value = state.settings.apiKey;
@@ -627,7 +627,7 @@ async function discoverPOIs(btn) {
     if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = true; btn.innerText = "Finding..."; }
 
     try {
-        const payload = { prompt: rawPrompt, model: state.settings.textModel || "openai", key: state.settings.apiKey };
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey };
         const res = await fetch("/api/proxy/poi", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -906,12 +906,12 @@ export default {
 
             if (url.pathname === "/api/proxy/poi") {
                 let promptStr = "";
-                let model = "openai";
+                let model = "gemini-search";
                 if (request.method === "POST") {
                     try {
                         const body = await request.json();
                         promptStr = body.prompt || "";
-                        model = body.model || "openai";
+                        model = body.model || "gemini-search";
                     } catch(e) {}
                 } else {
                     const city = url.searchParams.get("city");
@@ -940,7 +940,7 @@ export default {
             if (url.pathname === "/api/proxy/consult") {
                 const name = url.searchParams.get("name"); const city = url.searchParams.get("city"); const key = url.searchParams.get("key");
                 const promptStr = "Provide a concise 1-2 sentence visual description of the landmark '" + name + "' in " + city + ". No other text.";
-                const apiUrl = "https://gen.pollinations.ai/text/" + encodeURIComponent(promptStr) + "?model=openai" + (key ? "&key="+key : "");
+                const apiUrl = "https://gen.pollinations.ai/text/" + encodeURIComponent(promptStr) + "?model=gemini-search" + (key ? "&key="+key : "");
                 const res = await fetch(apiUrl);
                 const t = await res.text(); return new Response(JSON.stringify({ description: t.trim() }), { headers: { "Content-Type": "application/json" } });
             }
@@ -970,7 +970,7 @@ export default {
                     if (data.sundata) data.sundata.forEach(s => { if(s.phen=="Rise") astro.sunrise=s.time; if(s.phen=="Set") astro.sunset=s.time; });
                     if (data.moondata) data.moondata.forEach(m => { if(m.phen=="Rise") astro.moonrise=m.time; if(m.phen=="Set") astro.moonset=m.time; });
                 } catch(e) {}
-                const poiRes = await fetch("https://gen.pollinations.ai/text/" + encodeURIComponent("One famous landmark in " + city + ". Output JSON: {\"name\":\"...\",\"description\":\"...\"}") + "?model=openai&system=Output%20JSON%20only" + (key ? "&key="+key : ""));
+                const poiRes = await fetch("https://gen.pollinations.ai/text/" + encodeURIComponent("One famous landmark in " + city + ". Output JSON: {\"name\":\"...\",\"description\":\"...\"}") + "?model=gemini-search&system=Output%20JSON%20only" + (key ? "&key="+key : ""));
                 let poi = { name: city, description: "A beautiful view" };
                 try { 
                     const poiText = await poiRes.text();

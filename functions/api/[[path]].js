@@ -65,12 +65,12 @@ export async function onRequest(context) {
         // --- 2. POI Discovery Proxy ---
         if (path === "/api/proxy/poi") {
             let promptStr = "";
-            let model = "openai";
+            let model = "gemini-search";
             if (request.method === "POST") {
                 try {
                     const body = await request.json();
                     promptStr = body.prompt || "";
-                    model = body.model || "openai";
+                    model = body.model || "gemini-search";
                 } catch(e) {}
             } else {
                 const city = url.searchParams.get("city");
@@ -102,7 +102,7 @@ export async function onRequest(context) {
             const city = url.searchParams.get("city");
             const key = url.searchParams.get("key");
             const promptStr = `Provide a concise 1-2 sentence visual description of the landmark '${name}' in ${city}. No other text.`;
-            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=openai${key ? "&key="+key : ""}`;
+            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=gemini-search${key ? "&key="+key : ""}`;
             const res = await fetch(apiUrl);
             const t = await res.text();
             return new Response(JSON.stringify({ description: t.trim() }), { headers: { "Content-Type": "application/json" } });
@@ -115,7 +115,7 @@ export async function onRequest(context) {
             const city = url.searchParams.get("city") || "";
             const key = url.searchParams.get("key");
             const promptStr = `Refine this landmark info for an AI image generator. Landmark: "${name}", Description: "${desc}", Location: "${city}". Fix spelling, remove conversational filler, and make it visually evocative. Output ONLY raw JSON: {"name": "Refined Name", "description": "Refined 1-sentence visual description"}`;
-            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=openai&system=Output%20JSON%20only${key ? "&key="+key : ""}`;
+            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=gemini-search&system=Output%20JSON%20only${key ? "&key="+key : ""}`;
             const res = await fetch(apiUrl);
             const t = await res.text();
             const clean = t.split("```json").join("").split("```").join("").trim();
@@ -158,7 +158,7 @@ export async function onRequest(context) {
             const config = kvConfigRaw ? JSON.parse(kvConfigRaw) : { 
                 promptDay: SHARED_DEFAULT_DAY, promptNight: SHARED_DEFAULT_NIGHT,
                 promptPOIDomestic: SHARED_DEFAULT_POI_DOMESTIC, promptPOIIntl: SHARED_DEFAULT_POI_INTL,
-                textModel: "openai", model: "gptimage", apiKey: ""
+                textModel: "gemini-search", model: "gptimage", apiKey: ""
             };
 
             const lat = url.searchParams.get("lat") || 45.52;
@@ -184,7 +184,7 @@ export async function onRequest(context) {
                             { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
                             { role: "user", content: discPrompt }
                         ],
-                        model: config.textModel || "openai",
+                        model: config.textModel || "gemini-search",
                         jsonMode: true
                     };
                     const discRes = await fetch("https://text.pollinations.ai/", {
