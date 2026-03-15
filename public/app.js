@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - App Logic v1.10.5
+// Lumina Aeris Web & Worker - App Logic v1.10.6
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
@@ -23,14 +23,14 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.5');
+    const saved = localStorage.getItem('lumina_v1.10.6');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3') || localStorage.getItem('lumina_v1.10.2');
+        const old = localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3') || localStorage.getItem('lumina_v1.10.2');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -39,9 +39,14 @@ window.onload = async () => {
         }
     }
     
-    // Ensure critical structures exist but DON'T reset values if they were loaded
+    // Ensure critical structures exist
     if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = DEFAULT_STYLES;
-    if(!state.settings.style) state.settings.style = state.settings.styles[0]; // ONLY if missing
+    
+    // Validate current style
+    if (!state.settings.style || !state.settings.styles.includes(state.settings.style)) {
+        state.settings.style = state.settings.styles[0] || "Hyper photo realistic";
+    }
+
     if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
     if(!state.settings.locations) state.settings.locations = [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}];
 
@@ -51,7 +56,7 @@ window.onload = async () => {
     if (state.settings.locMode === 'gps') requestLocation();
 };
 
-function save() { localStorage.setItem('lumina_v1.10.5', JSON.stringify(state.settings)); }
+function save() { localStorage.setItem('lumina_v1.10.6', JSON.stringify(state.settings)); }
 
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
@@ -418,12 +423,13 @@ function savePOIModal() {
 }
 
 async function consultPOI(city, i) {
-    const p = state.settings.poiCache[city][i]; const btn = event.currentTarget; 
-    btn.disabled = true; btn.innerText = "...";
+    const p = state.settings.poiCache[city][i]; 
+    const btn = event ? event.currentTarget : null;
+    if(btn) { btn.disabled = true; btn.innerText = "..."; }
     try {
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
         const data = await res.json(); p.description = data.description; renderPOIs(); save();
-    } finally { btn.disabled = false; btn.innerText = "Consult"; }
+    } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } }
 }
 
 async function discoverPOIs(btn) {
@@ -519,11 +525,11 @@ function startFireflies() {
 }
 function stopFireflies() { cancelAnimationFrame(animId); }
 
-function switchTab(tab) {
+function switchTab(tab, btn) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(tab + '-view').classList.add('active');
-    if (event && event.currentTarget) event.currentTarget.classList.add('active');
+    if (btn) btn.classList.add('active');
 }
 function switchSubTab(tab) {
     document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none');
@@ -572,5 +578,5 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.5'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.6'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }

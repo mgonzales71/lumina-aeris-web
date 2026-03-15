@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Lumina Aeris</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.10.6">
 </head>
 <body>
 
@@ -52,7 +52,7 @@
 
 <header>
     <h1 id="header-title">Lumina Aeris</h1>
-    <div style="font-size: 9px; opacity: 0.4; font-weight: bold; letter-spacing: 1px; margin-top: 2px;">V1.10.5</div>
+    <div style="font-size: 9px; opacity: 0.4; font-weight: bold; letter-spacing: 1px; margin-top: 2px;">V1.10.6</div>
 </header>
 
 <div id="home-view" class="view active container">
@@ -85,7 +85,7 @@
 </div>
 
 <div id="data-view" class="view container">
-    <div style="display: flex; gap: 5px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px;"><button onclick="switchSubTab('themes')" id="tab-themes" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Themes</button><button onclick="switchSubTab('pois')" id="tab-pois" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Landmarks</button><button onclick="switchSubTab('locations')" id="tab-locations" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Locations</button><button onclick="switchSubTab('styles')" id="tab-styles" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Styles</button><button onclick="switchSubTab('prompts')" id="tab-data-prompts" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Prompts</button></div>
+    <div style="display: flex; gap: 5px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px;"><button onclick="switchSubTab('themes')" id="tab-themes" class="btn btn-secondary active" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Themes</button><button onclick="switchSubTab('pois')" id="tab-pois" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Landmarks</button><button onclick="switchSubTab('locations')" id="tab-locations" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Locations</button><button onclick="switchSubTab('styles')" id="tab-styles" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Styles</button><button onclick="switchSubTab('prompts')" id="tab-data-prompts" class="btn btn-secondary" style="flex:1; min-width: 80px; padding: 10px; font-size: 12px;">Prompts</button></div>
     
     <div id="sub-themes" class="sub-view"><div class="section-title">Seasonal Themes</div><div class="group" id="theme-list"></div><div style="display: flex; gap: 10px; flex-wrap: wrap;"><button onclick="addThemePrompt()" class="btn btn-secondary" style="flex:1; min-width: 140px;">➕ Add Theme</button><button onclick="openImport('themes')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📥 Import</button><button onclick="exportData('themes')" class="btn btn-secondary" style="flex:1; min-width: 140px;">📤 Export/View</button><button onclick="clearCategory('themes')" class="btn btn-secondary btn-danger" style="flex:1; min-width: 140px;">🗑️ Clear</button></div></div>
     
@@ -157,16 +157,16 @@
     <div class="group" id="profile-list"></div>
     <div class="group" style="padding: 12px;"><input type="text" id="new-profile-name" placeholder="New Profile Name" style="width: 100%; text-align: left; color: #fff; margin-bottom: 10px;"><button onclick="saveProfile()" class="btn btn-secondary">Save Current Config</button></div>
     <button onclick="resetApp()" class="btn btn-danger">Wipe All App Data</button>
-    <div style="text-align: center; margin-top: 30px; opacity: 0.3; font-size: 10px; font-weight: bold; letter-spacing: 2px;">V1.10.5</div>
+    <div style="text-align: center; margin-top: 30px; opacity: 0.3; font-size: 10px; font-weight: bold; letter-spacing: 2px;">V1.10.6</div>
 </div>
 
 <nav class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('home')"><span class="tab-icon">🏠</span><span>Home</span></button>
-    <button class="tab-btn" onclick="switchTab('prompts')"><span class="tab-icon">✍️</span><span>Prompts</span></button>
-    <button class="tab-btn" onclick="switchTab('data')"><span class="tab-icon">🗺️</span><span>Data</span></button>
-    <button class="tab-btn" onclick="switchTab('settings')"><span class="tab-icon">⚙️</span><span>More</span></button>
+    <button class="tab-btn active" onclick="switchTab('home', this)"><span class="tab-icon">🏠</span><span>Home</span></button>
+    <button class="tab-btn" onclick="switchTab('prompts', this)"><span class="tab-icon">✍️</span><span>Prompts</span></button>
+    <button class="tab-btn" onclick="switchTab('data', this)"><span class="tab-icon">🗺️</span><span>Data</span></button>
+    <button class="tab-btn" onclick="switchTab('settings', this)"><span class="tab-icon">⚙️</span><span>More</span></button>
 </nav>
 
-<script src="app.js"></script>
+<script src="app.js?v=1.10.6"></script>
 </body>
 </html>
