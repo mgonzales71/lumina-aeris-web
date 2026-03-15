@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Management Suite v1.10.7
+// Lumina Aeris Web & Worker - Management Suite v1.10.11
 // FULL VERSION - 100% COMPLETE - NO PLACEHOLDERS.
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
@@ -272,7 +272,7 @@ var state = {
         // --- 2. INITIALIZATION ---
         window.onload = async () => {
         // Attempt to load settings
-        const saved = localStorage.getItem('lumina_v1.9.9');
+        const saved = localStorage.getItem('lumina_v1.10.11');
         if (saved) {
         try {
             const parsed = JSON.parse(saved);
@@ -297,7 +297,7 @@ var state = {
                 const remote = await res.json();
                 if (remote && remote.promptDay) {
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.9.9', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
@@ -314,7 +314,7 @@ var state = {
         };
 
         async function save() { 
-        localStorage.setItem('lumina_v1.9.9', JSON.stringify(state.settings)); 
+        localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
         if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {

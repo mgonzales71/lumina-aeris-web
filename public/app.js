@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - App Logic v1.10.7
+// Lumina Aeris Web & Worker - App Logic v1.10.11
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
@@ -27,14 +27,14 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.7');
+    const saved = localStorage.getItem('lumina_v1.10.11');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
+        const old = localStorage.getItem('lumina_v1.10.10') || localStorage.getItem('lumina_v1.10.9') || localStorage.getItem('lumina_v1.10.8') || localStorage.getItem('lumina_v1.10.7') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4') || localStorage.getItem('lumina_v1.10.3');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -51,7 +51,7 @@ window.onload = async () => {
                 const remote = await res.json();
                 if (remote && remote.promptDay) { // Validation check
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
@@ -76,7 +76,7 @@ window.onload = async () => {
 };
 
 async function save() { 
-    localStorage.setItem('lumina_v1.10.7', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.10.11', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {
@@ -687,5 +687,5 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.7'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.11'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR; state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR; loadEditorPrompt(); save(); } }
