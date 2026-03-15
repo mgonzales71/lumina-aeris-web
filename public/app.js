@@ -21,14 +21,14 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.10.1');
+    const saved = localStorage.getItem('lumina_v1.10.2');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.0') || localStorage.getItem('lumina_v1.9.9');
+        const old = localStorage.getItem('lumina_v1.10.1') || localStorage.getItem('lumina_v1.10.0') || localStorage.getItem('lumina_v1.9.9');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -47,7 +47,7 @@ window.onload = async () => {
     if (state.settings.locMode === 'gps') requestLocation();
 };
 
-function save() { localStorage.setItem('lumina_v1.10.1', JSON.stringify(state.settings)); }
+function save() { localStorage.setItem('lumina_v1.10.2', JSON.stringify(state.settings)); }
 
 // --- 3. CORE FUNCTIONS ---
 function openImport(type) {
@@ -92,18 +92,10 @@ function confirmImport() {
         
         const parsed = JSON.parse(cleaned);
         
-        if (state.importType === 'themes') { 
-            state.settings.themes = parsed; renderThemes(); 
-        }
-        else if (state.importType === 'pois') { 
-            state.settings.poiCache = parsed; renderPOISelectors(); 
-        }
-        else if (state.importType === 'styles') {
-            state.settings.styles = parsed; renderStyles();
-        }
-        else if (state.importType === 'locations') {
-            state.settings.locations = parsed; renderLocations();
-        }
+        if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
+        else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
+        else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
+        else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
             state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; 
@@ -329,6 +321,59 @@ function deleteCity() {
     delete state.settings.poiCache[city]; renderPOISelectors(); save();
 }
 
+// --- LOCATION MODAL ---
+function openLocationModal() {
+    document.getElementById('modal-loc-city').value = "";
+    document.getElementById('modal-loc-state').value = "";
+    document.getElementById('modal-loc-country').value = "";
+    document.getElementById('modal-loc-lat').value = "";
+    document.getElementById('modal-loc-lon').value = "";
+    document.getElementById('loc-modal').style.display = 'flex';
+}
+function closeLocationModal() { document.getElementById('loc-modal').style.display = 'none'; }
+
+async function autofillLocation() {
+    const city = document.getElementById('modal-loc-city').value;
+    if (!city || city.length < 3) return alert("Enter a city name first");
+    const btn = document.getElementById('btn-loc-autofill');
+    btn.disabled = true; btn.innerText = "Finding...";
+    try {
+        const res = await fetch("/api/proxy/nominatim?lat=0&lon=0&q=" + encodeURIComponent(city));
+        const data = await res.json();
+        if (data && data.length > 0) {
+            const top = data[0];
+            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4);
+            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4);
+            // Try to extract state/country from display_name
+            const parts = top.display_name.split(',');
+            if (parts.length > 1) document.getElementById('modal-loc-state').value = parts[1].trim();
+            if (parts.length > 2) document.getElementById('modal-loc-country').value = parts[parts.length-1].trim();
+        } else {
+            alert("No results found for " + city);
+        }
+    } catch(e) {
+        alert("Autofill error: " + e.message);
+    } finally {
+        btn.disabled = false; btn.innerText = "✨ AI Autofill";
+    }
+}
+
+function saveLocationModal() {
+    const city = document.getElementById('modal-loc-city').value;
+    const lat = parseFloat(document.getElementById('modal-loc-lat').value);
+    const lon = parseFloat(document.getElementById('modal-loc-lon').value);
+    if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon are required");
+    
+    state.settings.locations.push({
+        city: city,
+        state: document.getElementById('modal-loc-state').value,
+        country: document.getElementById('modal-loc-country').value,
+        lat: lat,
+        lon: lon
+    });
+    renderLocations(); save(); closeLocationModal();
+}
+
 function openPOIModal() {
     const sel = document.getElementById('modal-poi-city');
     sel.innerHTML = "";
@@ -520,5 +565,5 @@ function saveProfile() {
 }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.1'); location.reload(); } }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.2'); location.reload(); } }
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }
