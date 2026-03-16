@@ -47,7 +47,12 @@ export async function onRequest(context) {
         // --- 0. Maintenance: Purge Old Data ---
         if (path === "/api/maintenance/purge") {
             const secret = url.searchParams.get("secret");
-            if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401, headers: getCorsHeaders() });
+            const pin = url.searchParams.get("pin");
+            const REQUIRED_PIN = env.MAINTENANCE_PIN || "9999"; // Fallback if not set in Cloudflare
+
+            if (secret !== SECRET_KEY) return new Response("Unauthorized Secret", { status: 401, headers: getCorsHeaders() });
+            if (pin !== REQUIRED_PIN) return new Response("Invalid Maintenance PIN", { status: 403, headers: getCorsHeaders() });
+            
             if (!env.LUMINA_SETTINGS) return new Response("KV missing", { status: 500 });
 
             const list = await env.LUMINA_SETTINGS.list();

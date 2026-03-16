@@ -610,6 +610,24 @@ async function createRemoteProfile() {
     state.currentProfile = name;
     await save(); // This pushes current settings to the new profile key
 }
+
+async function purgeCloudData() {
+    if (!state.settings.syncSecret) return alert("Sync Secret required to purge.");
+    const pin = prompt("Enter Maintenance PIN:");
+    if (!pin) return;
+    
+    try {
+        const res = await fetch(`/api/maintenance/purge?secret=${encodeURIComponent(state.settings.syncSecret)}&pin=${encodeURIComponent(pin)}`);
+        const data = await res.json();
+        if (data.success) {
+            alert("Purge Successful! Removed: " + (data.purged.join(", ") || "None"));
+        } else {
+            alert("Purge Failed: " + (data.error || "Check PIN"));
+        }
+    } catch(e) {
+        alert("Error communicating with server. Check PIN or Secret.");
+    }
+}
 function saveProfile() { const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter name"); state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = ""; }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
