@@ -181,6 +181,9 @@ async function fetchModels() {
 
 function setupUI() {
     loadEditorPrompt();
+    const badge = document.getElementById('profile-badge');
+    if (badge) badge.innerText = "PROFILE: " + (state.currentProfile || "DEFAULT");
+    
     document.getElementById('set-quality').value = state.settings.quality;
     if (document.getElementById('set-text-model')) document.getElementById('set-text-model').value = state.settings.textModel || "gemini-search";
     document.getElementById('set-res').value = state.settings.resolution;

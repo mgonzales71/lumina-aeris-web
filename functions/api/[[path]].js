@@ -86,11 +86,13 @@ export async function onRequest(context) {
         if (path === "/api/proxy/poi") {
             let promptStr = "";
             let model = "gemini-search";
+            let key = "";
             if (request.method === "POST") {
                 try {
                     const body = await request.json();
                     promptStr = body.prompt || "";
                     model = body.model || "gemini-search";
+                    key = body.key || "";
                 } catch(e) {}
             } else {
                 const city = url.searchParams.get("city");
@@ -106,7 +108,10 @@ export async function onRequest(context) {
                 jsonMode: true
             };
             
-            const res = await fetch("https://text.pollinations.ai/", {
+            let pollUrl = "https://text.pollinations.ai/";
+            if (key) pollUrl += `?key=${key}`;
+
+            const res = await fetch(pollUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
