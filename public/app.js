@@ -29,7 +29,7 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.14.4');
+    const saved = localStorage.getItem('lumina_v1.14.5');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
@@ -75,14 +75,14 @@ async function switchRemoteProfile(name) {
                 state.settings = remote;
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
-                localStorage.setItem('lumina_v1.14.4', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.14.5', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) { console.error("KV Pull failed", e); }
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.14.4', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.14.5', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -114,27 +114,27 @@ function confirmImport() {
     try {
         const startBrace = raw.indexOf('{');
         const startBracket = raw.indexOf('[');
-        let start = -1;
-        if (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) start = startBrace;
-        else start = startBracket;
+        let start = (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) ? startBrace : startBracket;
 
         const endBrace = raw.lastIndexOf('}');
         const endBracket = raw.lastIndexOf(']');
-        let end = -1;
-        if (endBrace !== -1 && (endBracket === -1 || endBrace > endBracket)) end = endBrace;
-        else end = endBracket;
+        let end = (endBrace > endBracket) ? endBrace : endBracket;
         
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
         let jsonStr = raw.substring(start, end + 1);
         
-        // 1. Replace smart quotes with single quotes to avoid breaking JSON structure
-        // 2. Remove hidden characters
-        // 3. Handle unescaped newlines inside strings (common in LLM output)
+        // --- SELF-HEALING LOGIC ---
         let cleaned = jsonStr
+            // 1. Replace smart quotes with single quotes (prevents structural breakage)
             .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "'") 
             .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-            .replace(/[\u200B-\u200D\uFEFF]/g, "");
+            // 2. Remove hidden characters and zero-width spaces
+            .replace(/[\u200B-\u200D\uFEFF]/g, "")
+            // 3. Remove trailing commas in arrays/objects (e.g., [1, 2,] -> [1, 2])
+            .replace(/,\s*([\]}])/g, '$1')
+            // 4. Flatten literal newlines into spaces (literal newlines inside strings break JSON.parse)
+            .replace(/\r?\n|\r/g, ' ');
 
         const parsed = JSON.parse(cleaned);
         
@@ -155,7 +155,7 @@ function confirmImport() {
         save(); alert("Import successful!"); closeImport();
     } catch(e) { 
         console.error("Parse Error Detail:", e);
-        alert("Import failed. Ensure your JSON uses standard double quotes for structure. Error: " + e.message); 
+        alert("Import failed. The data might have structural errors. Error: " + e.message); 
     }
 }
 
