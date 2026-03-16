@@ -127,19 +127,27 @@ function confirmImport() {
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
         let cleaned = raw.substring(start, end + 1);
-        // Robust cleaning for JSON imports
-        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
-                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "")
-                         .replace(/\\r\\n/g, "\\n")
-                         .replace(/\\r/g, "\\n");
+        // Ultra-robust cleaning
+        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Smart double quotes
+                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Smart single quotes
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Hidden zero-width spaces
+                         .replace(/\r\n/g, "\\n") // Convert Windows newlines in strings
+                         .replace(/\n/g, "\\n"); // Convert Unix newlines in strings
+                         
+        // After converting all to \n, we need to fix the structural newlines that shouldn't be escaped
+        // This is tricky, so a better approach is to only escape newlines that are NOT followed by structural chars
+        // BUT simpler is usually better: strip actual newlines and let the string content handle the escaped ones.
+        let structuralCleaned = raw.substring(start, end + 1)
+            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
 
-        const parsed = JSON.parse(cleaned);
+        const parsed = JSON.parse(structuralCleaned);
         
         if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
         else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
         else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
         else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
+        else if (state.importType === 'full') { Object.assign(state.settings, parsed); setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
             state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; 
@@ -147,7 +155,10 @@ function confirmImport() {
         }
         
         save(); alert("Import successful!"); closeImport();
-    } catch(e) { alert("Import failed: " + e.message); }
+    } catch(e) { 
+        console.error("Parse Error Detail:", e);
+        alert("Import failed: " + e.message + ". Check console for details."); 
+    }
 }
 
 async function fetchModels() {
@@ -649,8 +660,14 @@ function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JS
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
 
 function exportData(type) {
-    let data = state.settings[type] || state.settings;
-    if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
+    let data;
+    if (type === 'pois') data = state.settings.poiCache;
+    else if (type === 'themes') data = state.settings.themes;
+    else if (type === 'styles') data = state.settings.styles;
+    else if (type === 'locations') data = state.settings.locations;
+    else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
+    else data = state.settings; // Full Profile
+    
     document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
