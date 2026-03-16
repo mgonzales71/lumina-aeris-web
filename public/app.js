@@ -127,9 +127,12 @@ function confirmImport() {
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
         let cleaned = raw.substring(start, end + 1);
+        // Robust cleaning for JSON imports
         cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
                          .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "");
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "")
+                         .replace(/\\r\\n/g, "\\n")
+                         .replace(/\\r/g, "\\n");
 
         const parsed = JSON.parse(cleaned);
         
@@ -467,8 +470,10 @@ async function handleGenerate() {
         const envRes = await fetch("/api/proxy/weather?lat=" + state.lat + "&lon=" + state.lon);
         const env = await envRes.json(); const cityKey = state.city.toLowerCase().trim();
         if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) { btn.innerText = "Discovering..."; await discoverPOIs(null); }
-        const pois = state.settings.poiCache[cityKey] || [{name: state.city, description: "A beautiful view"}];
-        const poi = pois[Math.floor(Math.random() * pois.length)]; const theme = getThemeForDate();
+        let pois = state.settings.poiCache[cityKey];
+        if (!pois || !Array.isArray(pois) || pois.length === 0) pois = [{name: state.city, description: "A beautiful view"}];
+        const poi = pois[Math.floor(Math.random() * pois.length)] || {name: state.city, description: "A beautiful view"};
+        const theme = getThemeForDate();
         btn.innerText = "Dreaming..."; const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
         
