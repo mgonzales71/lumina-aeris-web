@@ -407,11 +407,20 @@ function renderPOIs() {
     list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return;
     state.settings.poiCache[city].forEach((p, i) => {
         const row = document.createElement('div'); row.className = 'list-item';
-        row.innerHTML = '<div><div class="list-item-title">' + p.name + '</div><div class="list-item-sub">' + (p.description || "") + '</div></div><div><button onclick="consultPOI(\\'' + city + '\\', ' + i + ')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI(\\'' + city + '\\', ' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button></div>';
+        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div>
+                         <div>
+                            <button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button>
+                            <button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button>
+                         </div>`;
         list.appendChild(row);
     });
 }
 function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); save(); }
+function deleteCity() {
+    const city = document.getElementById('poi-city-select').value;
+    if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return;
+    delete state.settings.poiCache[city]; renderPOISelectors(); save();
+}
 
 async function consultPOI(city, i) {
     const p = state.settings.poiCache[city][i]; 
