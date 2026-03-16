@@ -223,12 +223,26 @@ export async function onRequest(context) {
                 textModel: "gemini-search", model: "gptimage", apiKey: "", resolution: "1290x2796", style: "Hyper photo realistic"
             };
 
-            const lat = url.searchParams.get("lat") || 45.52;
-            const lon = url.searchParams.get("lon") || -122.67;
-            const city = url.searchParams.get("city") || "Unknown";
-            const state_region = url.searchParams.get("state") || "";
-            const country = url.searchParams.get("country") || "";
-            const cityKey = `poi:${city.toLowerCase().trim()}`;
+            let lat = url.searchParams.get("lat") || 45.52;
+            let lon = url.searchParams.get("lon") || -122.67;
+            let city = url.searchParams.get("city");
+            let state_region = url.searchParams.get("state") || "";
+            let country = url.searchParams.get("country") || "";
+
+            // Internal Reverse Geocode if city is missing
+            if (!city) {
+                try {
+                    const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, { headers: { "User-Agent": "LuminaAeris/1.0" } });
+                    const nomData = await nomRes.json();
+                    if (nomData && nomData.address) {
+                        city = nomData.address.city || nomData.address.town || nomData.address.village || "Unknown";
+                        state_region = nomData.address.state || "";
+                        country = nomData.address.country || "";
+                    }
+                } catch(e) { city = "Unknown"; }
+            }
+
+            const cityKey = `poi:${(city || "Unknown").toLowerCase().trim()}`;
 
             // Check KV for cached POIs
             let pois = [];
