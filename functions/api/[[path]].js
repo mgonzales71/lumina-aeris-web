@@ -41,9 +41,27 @@ export async function onRequest(context) {
         return new Response(null, { headers: getCorsHeaders() });
     }
 
-    const SECRET_KEY = env.SECRET_KEY || 'lumina_secret_2026'; 
+    const SECRET_KEY = env.SECRET_KEY || 'ZeldaLink'; 
 
     try {
+        // --- 0. Maintenance: Purge Old Data ---
+        if (path === "/api/maintenance/purge") {
+            const secret = url.searchParams.get("secret");
+            if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401, headers: getCorsHeaders() });
+            if (!env.LUMINA_SETTINGS) return new Response("KV missing", { status: 500 });
+
+            const list = await env.LUMINA_SETTINGS.list();
+            let purged = [];
+            for (const key of list.keys) {
+                // Keep new profiles (settings:*) and cached landmarks (poi:*)
+                if (!key.name.startsWith("settings:") && !key.name.startsWith("poi:")) {
+                    await env.LUMINA_SETTINGS.delete(key.name);
+                    purged.push(key.name);
+                }
+            }
+            return new Response(JSON.stringify({ success: true, purged }), { headers: getCorsHeaders() });
+        }
+
         // --- 1. Weather Proxy ---
         if (path === "/api/proxy/weather") {
             const lat = url.searchParams.get("lat") || 45.52;
