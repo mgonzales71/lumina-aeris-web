@@ -153,32 +153,46 @@ export async function onRequest(context) {
             return new Response(JSON.stringify(await res.json()), { headers: getCorsHeaders() });
         }
 
-        // --- 5. KV Config Management ---
+        // --- 5. KV Config Management (Multi-Profile) ---
         if (path === "/api/config") {
             const secret = request.headers.get("X-Lumina-Secret") || url.searchParams.get("secret");
             if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401, headers: getCorsHeaders() });
+            if (!env.LUMINA_SETTINGS) return new Response(JSON.stringify({ error: "KV Binding missing" }), { status: 500, headers: getCorsHeaders() });
 
-            if (!env.LUMINA_SETTINGS) return new Response(JSON.stringify({ error: "KV Binding 'LUMINA_SETTINGS' is not configured." }), { status: 500, headers: getCorsHeaders() });
+            const profile = url.searchParams.get("profile") || "default";
+            const kvKey = `settings:${profile}`;
 
             if (request.method === "POST") {
                 const body = await request.json();
-                await env.LUMINA_SETTINGS.put("settings", JSON.stringify(body));
+                await env.LUMINA_SETTINGS.put(kvKey, JSON.stringify(body));
+                return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
+            } else if (request.method === "DELETE") {
+                await env.LUMINA_SETTINGS.delete(kvKey);
                 return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
             } else {
-                const config = await env.LUMINA_SETTINGS.get("settings");
+                const config = await env.LUMINA_SETTINGS.get(kvKey);
                 return new Response(config || "{}", { headers: getCorsHeaders() });
             }
         }
 
-        // --- 6. Shortcut Context API (The "Brain" for iOS) ---
+        if (path === "/api/profiles") {
+            const secret = request.headers.get("X-Lumina-Secret") || url.searchParams.get("secret");
+            if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401, headers: getCorsHeaders() });
+            
+            const list = await env.LUMINA_SETTINGS.list({ prefix: "settings:" });
+            const profiles = list.keys.map(k => k.name.replace("settings:", ""));
+            return new Response(JSON.stringify(profiles), { headers: getCorsHeaders() });
+        }
+
+        // --- 6. Shortcut Context API (Profile Aware) ---
         if (path === "/api/context") {
             const secret = url.searchParams.get("secret");
             if (secret !== SECRET_KEY) return new Response("Unauthorized", { status: 401, headers: getCorsHeaders() });
 
-            // Load Global Settings from KV
+            const profile = url.searchParams.get("profile") || "default";
             let kvConfigRaw = null;
             if (env.LUMINA_SETTINGS) {
-                try { kvConfigRaw = await env.LUMINA_SETTINGS.get("settings"); } catch(e) {}
+                try { kvConfigRaw = await env.LUMINA_SETTINGS.get(`settings:${profile}`); } catch(e) {}
             }
             const config = kvConfigRaw ? JSON.parse(kvConfigRaw) : { 
                 promptDay: SHARED_DEFAULT_DAY, promptNight: SHARED_DEFAULT_NIGHT,

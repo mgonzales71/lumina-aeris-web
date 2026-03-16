@@ -154,7 +154,11 @@
         <div class="row" id="row-custom-list" style="display: none;"><span class="label">Pick Location</span><select id="set-custom-loc" onchange="applySavedLoc()"></select></div>
     </div>
     
-    <div class="section-title">Profiles</div>
+    <div class="section-title">Cloud Accounts</div>
+    <div class="group" id="remote-profile-list"></div>
+    <div class="group" style="padding: 12px;"><button onclick="createRemoteProfile()" class="btn btn-secondary">Create New Cloud Profile</button></div>
+
+    <div class="section-title">Local Profiles</div>
     <div class="group" id="profile-list"></div>
     <div class="group" style="padding: 12px;"><input type="text" id="new-profile-name" placeholder="New Profile Name" style="width: 100%; text-align: left; color: #fff; margin-bottom: 10px;"><button onclick="saveProfile()" class="btn btn-secondary">Save Current Config</button></div>
     <button onclick="resetApp()" class="btn btn-danger">Wipe All App Data</button>

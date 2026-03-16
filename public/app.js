@@ -12,7 +12,7 @@ const DEFAULT_STYLES = ["Hyper photo realistic", "Cinematic photography", "Water
 var state = {
     currentTab: 'home', isGenerating: false,
     lat: 45.52, lon: -122.67, city: "Portland", state: "Oregon", country: "USA",
-    importType: '',
+    importType: '', currentProfile: 'default', remoteProfiles: [],
     settings: {
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
         promptPOIDomestic: DEFAULT_POI_DOMESTIC_STR, promptPOIIntl: DEFAULT_POI_INTL_STR,
@@ -29,35 +29,18 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.12.0');
+    const saved = localStorage.getItem('lumina_v1.12.1');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
-    } else {
-        // Migration from older versions
-        const old = localStorage.getItem('lumina_v1.11.0') || localStorage.getItem('lumina_v1.10.18');
-        if (old) { 
-            try { 
-                Object.assign(state.settings, JSON.parse(old)); 
-                save(); 
-            } catch(e) {} 
-        }
     }
-
-    // KV Sync (Pull)
+    
+    // Remote Sync (Pull Profiles)
     if (state.settings.syncSecret) {
-        try {
-            const res = await fetch("/api/config?secret=" + encodeURIComponent(state.settings.syncSecret));
-            if (res.ok) {
-                const remote = await res.json();
-                if (remote && remote.promptDay) {
-                    Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.12.0', JSON.stringify(state.settings)); 
-                }
-            }
-        } catch(e) { console.error("KV Pull failed", e); }
+        await refreshRemoteProfiles();
+        await switchRemoteProfile(state.currentProfile || 'default');
     }
     
     if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = DEFAULT_STYLES;
@@ -71,11 +54,39 @@ window.onload = async () => {
     else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx !== undefined ? state.settings.customLocIdx : 0);
 };
 
+async function refreshRemoteProfiles() {
+    if (!state.settings.syncSecret) return;
+    try {
+        const res = await fetch("/api/profiles?secret=" + encodeURIComponent(state.settings.syncSecret));
+        if (res.ok) {
+            state.remoteProfiles = await res.json();
+            renderRemoteProfileList();
+        }
+    } catch(e) { console.error("Profile list fetch failed", e); }
+}
+
+async function switchRemoteProfile(name) {
+    if (!state.settings.syncSecret) return;
+    try {
+        const res = await fetch(`/api/config?profile=${encodeURIComponent(name)}&secret=${encodeURIComponent(state.settings.syncSecret)}`);
+        if (res.ok) {
+            const remote = await res.json();
+            if (remote && remote.promptDay) {
+                state.settings = remote;
+                state.currentProfile = name;
+                setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
+                localStorage.setItem('lumina_v1.12.1', JSON.stringify(state.settings)); 
+            }
+        }
+    } catch(e) { console.error("KV Pull failed", e); }
+}
+
 async function save() { 
-    localStorage.setItem('lumina_v1.12.0', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.12.1', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
-            await fetch("/api/config", {
+            const profile = state.currentProfile || "default";
+            await fetch(`/api/config?profile=${encodeURIComponent(profile)}`, {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json",
@@ -83,6 +94,7 @@ async function save() {
                 },
                 body: JSON.stringify(state.settings)
             });
+            await refreshRemoteProfiles();
         } catch(e) { console.error("KV Sync failed", e); }
     }
 }
@@ -559,9 +571,41 @@ function renderProfiles() {
     list.innerHTML = "";
     state.settings.profiles.forEach((p, i) => {
         const row = document.createElement('div'); row.className = 'list-item';
-        row.innerHTML = '<div><div class="list-item-title">' + p.name + '</div></div><div><button onclick="loadProfile(' + i + ')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button></div>';
+        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div>
+                         <div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`;
         list.appendChild(row);
     });
+}
+
+function renderRemoteProfileList() {
+    const list = document.getElementById('remote-profile-list'); if(!list) return;
+    list.innerHTML = "";
+    state.remoteProfiles.forEach(name => {
+        const row = document.createElement('div'); row.className = 'list-item';
+        const active = (name === state.currentProfile) ? " (Active)" : "";
+        row.innerHTML = `<div><div class="list-item-title">${name}${active}</div><div class="list-item-sub">Cloud</div></div>
+                         <div>
+                            <button onclick="switchRemoteProfile('${name}')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Switch</button>
+                            <button onclick="deleteRemoteProfile('${name}')" style="color:#ff3b30; background:none; border:none;">Del</button>
+                         </div>`;
+        list.appendChild(row);
+    });
+}
+
+async function deleteRemoteProfile(name) {
+    if (name === 'default') return alert("Cannot delete default profile");
+    if (!confirm(`Delete cloud profile '${name}'?`)) return;
+    try {
+        await fetch(`/api/config?profile=${encodeURIComponent(name)}&secret=${encodeURIComponent(state.settings.syncSecret)}`, { method: 'DELETE' });
+        await refreshRemoteProfiles();
+    } catch(e) {}
+}
+
+async function createRemoteProfile() {
+    const name = prompt("New Cloud Profile Name:");
+    if (!name) return;
+    state.currentProfile = name;
+    await save(); // This pushes current settings to the new profile key
 }
 function saveProfile() { const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter name"); state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = ""; }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded: " + state.settings.name); }
