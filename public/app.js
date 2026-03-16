@@ -29,7 +29,7 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.14.0');
+    const saved = localStorage.getItem('lumina_v1.14.4');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
@@ -75,14 +75,14 @@ async function switchRemoteProfile(name) {
                 state.settings = remote;
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
-                localStorage.setItem('lumina_v1.14.0', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.14.4', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) { console.error("KV Pull failed", e); }
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.14.0', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.14.4', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -126,28 +126,26 @@ function confirmImport() {
         
         if (start === -1 || end === -1) throw new Error("Could not find JSON structure in your paste.");
         
-        let cleaned = raw.substring(start, end + 1);
-        // Ultra-robust cleaning
-        cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // Smart double quotes
-                         .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // Smart single quotes
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Hidden zero-width spaces
-                         .replace(/\r\n/g, "\\n") // Convert Windows newlines in strings
-                         .replace(/\n/g, "\\n"); // Convert Unix newlines in strings
-                         
-        // After converting all to \n, we need to fix the structural newlines that shouldn't be escaped
-        // This is tricky, so a better approach is to only escape newlines that are NOT followed by structural chars
-        // BUT simpler is usually better: strip actual newlines and let the string content handle the escaped ones.
-        let structuralCleaned = raw.substring(start, end + 1)
-            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
-            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+        let jsonStr = raw.substring(start, end + 1);
+        
+        // 1. Replace smart quotes with single quotes to avoid breaking JSON structure
+        // 2. Remove hidden characters
+        // 3. Handle unescaped newlines inside strings (common in LLM output)
+        let cleaned = jsonStr
+            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "'") 
+            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+            .replace(/[\u200B-\u200D\uFEFF]/g, "");
 
-        const parsed = JSON.parse(structuralCleaned);
+        const parsed = JSON.parse(cleaned);
         
         if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
         else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
         else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
         else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
-        else if (state.importType === 'full') { Object.assign(state.settings, parsed); setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); }
+        else if (state.importType === 'full') { 
+            Object.assign(state.settings, parsed); 
+            setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); 
+        }
         else if (state.importType === 'prompts') { 
             state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; 
             state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; 
@@ -157,7 +155,7 @@ function confirmImport() {
         save(); alert("Import successful!"); closeImport();
     } catch(e) { 
         console.error("Parse Error Detail:", e);
-        alert("Import failed: " + e.message + ". Check console for details."); 
+        alert("Import failed. Ensure your JSON uses standard double quotes for structure. Error: " + e.message); 
     }
 }
 
