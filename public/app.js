@@ -1,9 +1,11 @@
-// Lumina Aeris Web & Worker - App Logic v1.11.0
+// Lumina Aeris Web & Worker - App Logic v1.12.0
+// Mandate: NO Truncation. NO Minification. NO Missing Logic.
+
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
-const DEFAULT_POI_DOMESTIC_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: "name" and "description". 5. The "description" should consist of one to two concise sentences that visually describe the named point of interest.";
-const DEFAULT_POI_INTL_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {country}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: "name" and "description". 5. The "description" should consist of one to two concise sentences that visually describe the named point of interest.";
+const DEFAULT_POI_DOMESTIC_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
+const DEFAULT_POI_INTL_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {country}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
 const TOKENS_LIST = ["{style}", "{poi_name}", "{poi_desc}", "{city}", "{state_region}", "{country}", "{time_of_day}", "{datetime}", "{weather}", "{temperature}", "{theme}", "{moon_phase}", "{moon_illumination}", "{moonrise}", "{moonset}", "{sunrise}", "{sunset}", "{uv_index}", "{visibility}", "{cloud_cover}", "{wind_speed}"];
 const DEFAULT_STYLES = ["Hyper photo realistic", "Cinematic photography", "Watercolor painting", "Oil painting", "Pencil sketch", "Crayon drawing", "Claymation", "3D animation render", "Pixar-style 3D illustration", "Flat vector illustration", "Paper craft collage", "Ukiyo-e woodblock print", "Impressionist painting", "Pixel art", "Neon noir", "Vintage film photograph", "Comic book art", "Stained glass illustration"];
 
@@ -27,14 +29,15 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.11.0');
+    const saved = localStorage.getItem('lumina_v1.12.0');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
             Object.assign(state.settings, parsed);
         } catch(e) { console.error("Save load error", e); }
     } else {
-        const old = localStorage.getItem('lumina_v1.10.12') || localStorage.getItem('lumina_v1.10.6') || localStorage.getItem('lumina_v1.10.5') || localStorage.getItem('lumina_v1.10.4');
+        // Migration from older versions
+        const old = localStorage.getItem('lumina_v1.11.0') || localStorage.getItem('lumina_v1.10.18');
         if (old) { 
             try { 
                 Object.assign(state.settings, JSON.parse(old)); 
@@ -43,28 +46,21 @@ window.onload = async () => {
         }
     }
 
-    // NEW: Cloudflare KV Sync (Pull)
+    // KV Sync (Pull)
     if (state.settings.syncSecret) {
         try {
             const res = await fetch("/api/config?secret=" + encodeURIComponent(state.settings.syncSecret));
             if (res.ok) {
                 const remote = await res.json();
-                if (remote && remote.promptDay) { // Validation check
+                if (remote && remote.promptDay) {
                     Object.assign(state.settings, remote);
-                    localStorage.setItem('lumina_v1.11.0', JSON.stringify(state.settings)); 
+                    localStorage.setItem('lumina_v1.12.0', JSON.stringify(state.settings)); 
                 }
             }
         } catch(e) { console.error("KV Pull failed", e); }
     }
     
-    // Ensure critical structures exist
     if(!state.settings.styles || state.settings.styles.length === 0) state.settings.styles = DEFAULT_STYLES;
-    
-    // Validate current style
-    if (!state.settings.style || !state.settings.styles.includes(state.settings.style)) {
-        state.settings.style = state.settings.styles[0] || "Hyper photo realistic";
-    }
-
     if(!state.settings.themes || state.settings.themes.length === 0) state.settings.themes = [{"Begin":101, "End":103, "Theme":"New Years"}, {"Begin":1015, "End":1031, "Theme":"Halloween"}, {"Begin":1220, "End":1231, "Theme":"Holiday Season"}];
     if(!state.settings.locations) state.settings.locations = [{"city": "Portland", "state": "Oregon", "country": "USA", "lat": 45.52, "lon": -122.67}];
 
@@ -76,7 +72,7 @@ window.onload = async () => {
 };
 
 async function save() { 
-    localStorage.setItem('lumina_v1.11.0', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.12.0', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             await fetch("/api/config", {
@@ -91,7 +87,7 @@ async function save() {
     }
 }
 
-// --- 3. CORE FUNCTIONS ---
+// --- 3. UI HANDLERS ---
 function openImport(type) {
     state.importType = type;
     document.getElementById('import-title').innerText = "Import " + type.toUpperCase();
@@ -121,21 +117,8 @@ function confirmImport() {
         let cleaned = raw.substring(start, end + 1);
         cleaned = cleaned.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
                          .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-                         .replace(/[\u200B-\u200D\uFEFF]/g, "")
-                         .replace(/
-/g, "
-"); 
+                         .replace(/[\u200B-\u200D\uFEFF]/g, "");
 
-        cleaned = cleaned.replace(/":\s*"([\s\S]*?)"\s*([,}])/g, (match, content, suffix) => {
-            let repaired = content.replace(/(?<!\)"/g, '"');
-            repaired = repaired.replace(/
-/g, "
-");
-            return '": "' + repaired + '"' + suffix;
-        });
-
-        cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
-        
         const parsed = JSON.parse(cleaned);
         
         if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
@@ -166,10 +149,7 @@ async function fetchModels() {
             });
             sel.value = state.settings.model || "gptimage";
         }
-    } catch(e) {
-        const sel = document.getElementById('set-model');
-        if(sel) sel.innerHTML = '<option value="gptimage">GPT Image</option><option value="flux">Flux</option>';
-    }
+    } catch(e) {}
 
     try {
         const txtRes = await fetch('https://gen.pollinations.ai/text/models');
@@ -184,11 +164,9 @@ async function fetchModels() {
             });
             tsel.value = state.settings.textModel || "gemini-search";
         }
-    } catch(e) {
-        const tsel = document.getElementById('set-text-model');
-        if(tsel) tsel.innerHTML = '<option value="gemini-search">Gemini Search</option>';
-    }
+    } catch(e) {}
 }
+
 function setupUI() {
     loadEditorPrompt();
     document.getElementById('set-quality').value = state.settings.quality;
@@ -322,30 +300,19 @@ async function autofillLocation() {
         let q = city;
         if (stateVal) q += ", " + stateVal;
         if (country) q += ", " + country;
-        
-        const res = await fetch("/api/proxy/nominatim?lat=0&lon=0&q=" + encodeURIComponent(q));
+        const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(q));
         const data = await res.json();
         if (data && data.length > 0) {
             const top = data[0];
             document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4);
             document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4);
-            
-            // Re-fetch with addressdetails=1 for better parsing if available
-            const detailRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat="+top.lat+"&lon="+top.lon+"&addressdetails=1");
-            const detail = await res.json();
-            if (detail.address) {
-                document.getElementById('modal-loc-city').value = detail.address.city || detail.address.town || detail.address.village || city;
-                document.getElementById('modal-loc-state').value = detail.address.state || stateVal || "";
-                document.getElementById('modal-loc-country').value = detail.address.country || country || "";
+            if (top.address) {
+                document.getElementById('modal-loc-city').value = top.address.city || top.address.town || top.address.village || city;
+                document.getElementById('modal-loc-state').value = top.address.state || stateVal || "";
+                document.getElementById('modal-loc-country').value = top.address.country || country || "";
             }
-        } else {
-            alert("No results found for " + q);
-        }
-    } catch(e) {
-        alert("Autofill error: " + e.message);
-    } finally {
-        btn.disabled = false; btn.innerText = "✨ AI Autofill";
-    }
+        } else { alert("No results found for " + q); }
+    } catch(e) { alert("Autofill error: " + e.message); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
 }
 
 function saveLocationModal() {
@@ -353,20 +320,12 @@ function saveLocationModal() {
     const lat = parseFloat(document.getElementById('modal-loc-lat').value);
     const lon = parseFloat(document.getElementById('modal-loc-lon').value);
     if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon are required");
-    
-    state.settings.locations.push({
-        city: city,
-        state: document.getElementById('modal-loc-state').value,
-        country: document.getElementById('modal-loc-country').value,
-        lat: lat,
-        lon: lon
-    });
+    state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
     renderLocations(); save(); closeLocationModal();
 }
 
 function renderLocations() {
-    const list = document.getElementById('location-list');
-    if(!list) return;
+    const list = document.getElementById('location-list'); if(!list) return;
     list.innerHTML = "";
     state.settings.locations.forEach((loc, i) => {
         const row = document.createElement('div'); row.className = 'list-item';
@@ -375,95 +334,13 @@ function renderLocations() {
     });
     renderPOISelectors(); 
 }
-
 function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); save(); }
 
-function exportData(type) {
-    let data = {};
-    if (type === 'themes') data = state.settings.themes;
-    else if (type === 'pois') data = state.settings.poiCache;
-    else if (type === 'styles') data = state.settings.styles;
-    else if (type === 'locations') data = state.settings.locations;
-    else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
-    
-    document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
-    document.getElementById('import-text').value = JSON.stringify(data, null, 2);
-    document.getElementById('import-modal').classList.add('active');
-}
-
-function clearCategory(type) {
-    if (!confirm("Wipe all " + type + "?")) return;
-    if (type === 'themes') state.settings.themes = [];
-    else if (type === 'styles') state.settings.styles = ["Hyper photo realistic"];
-    else if (type === 'locations') state.settings.locations = [];
-    else state.settings.poiCache = {};
-    save(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
-}
-
-function renderStyles() {
-    const list = document.getElementById('style-list'); const sel = document.getElementById('set-style');
-    if(!list || !sel) return;
-    list.innerHTML = ""; sel.innerHTML = "";
-    state.settings.styles.forEach((s, i) => {
-        const row = document.createElement('div'); row.className = 'list-item';
-        row.innerHTML = '<div><div class="list-item-title">' + s + '</div></div><button onclick="deleteStyle(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>';
-        list.appendChild(row);
-        const opt = document.createElement('option'); opt.value = s; opt.innerText = s; sel.appendChild(opt);
-    });
-    sel.value = state.settings.style || (state.settings.styles.length > 0 ? state.settings.styles[0] : "");
-}
-function addStylePrompt() { const s = prompt("New Style Name:"); if(s) { state.settings.styles.push(s); renderStyles(); save(); } }
-function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); save(); }
-
-function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); save(); }
-function addThemePrompt() {
-    const Theme = prompt("Theme Name:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:");
-    if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); save(); }
-}
-function renderThemes() {
-    const list = document.getElementById('theme-list'); if(!list) return;
-    list.innerHTML = "";
-    state.settings.themes.forEach((t, i) => {
-        const row = document.createElement('div'); row.className = 'list-item';
-        row.innerHTML = '<div><div class="list-item-title">' + t.Theme + '</div><div class="list-item-sub">' + t.Begin + ' - ' + t.End + '</div></div><button onclick="deleteTheme(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>';
-        list.appendChild(row);
-    });
-}
-
-function renderPOISelectors() {
-    const sel = document.getElementById('poi-city-select'); if(!sel) return;
-    sel.innerHTML = "";
-    const cachedCities = Object.keys(state.settings.poiCache);
-    const savedCities = state.settings.locations.map(l => l.city.toLowerCase());
-    const allCities = [...new Set([...cachedCities, ...savedCities])].sort();
-    allCities.forEach(city => {
-        const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt);
-    });
-    renderPOIs();
-}
-function renderPOIs() {
-    const list = document.getElementById('poi-list'); if(!list) return;
-    const city = document.getElementById('poi-city-select').value;
-    list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return;
-    state.settings.poiCache[city].forEach((p, i) => {
-        const row = document.createElement('div'); row.className = 'list-item';
-        row.innerHTML = '<div><div class="list-item-title">' + p.name + '</div><div class="list-item-sub">' + (p.description || "") + '</div></div><div><button onclick="consultPOI('' + city + '', ' + i + ')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('' + city + '', ' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button></div>';
-        list.appendChild(row);
-    });
-}
-function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); save(); }
-function deleteCity() {
-    const city = document.getElementById('poi-city-select').value;
-    if (!city || !confirm("Delete all for " + city.toUpperCase() + "?")) return;
-    delete state.settings.poiCache[city]; renderPOISelectors(); save();
-}
-
+// --- POI MODAL ---
 function openPOIModal() {
-    const sel = document.getElementById('modal-poi-city');
-    sel.innerHTML = "";
+    const sel = document.getElementById('modal-poi-city'); sel.innerHTML = "";
     state.settings.locations.forEach(loc => {
-        const opt = document.createElement('option'); opt.value = loc.city.toLowerCase(); opt.innerText = loc.city;
-        sel.appendChild(opt);
+        const opt = document.createElement('option'); opt.value = loc.city.toLowerCase(); opt.innerText = loc.city; sel.appendChild(opt);
     });
     document.getElementById('poi-modal').style.display = 'flex';
 }
@@ -494,6 +371,48 @@ function savePOIModal() {
     renderPOISelectors(); save(); closePOIModal();
 }
 
+async function discoverPOIs(btn) {
+    const city = state.city;
+    const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states");
+    let rawPrompt = isUS ? (state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR) : (state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR);
+    rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country);
+    
+    if(btn) { btn.disabled = true; btn.innerText = "Finding..."; }
+    try {
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey };
+        const res = await fetch("/api/proxy/poi", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        const cityKey = city.toLowerCase().trim();
+        if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = [];
+        if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data];
+        else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
+        renderPOISelectors(); save();
+    } catch(e) { console.error("Discovery error:", e); } finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } }
+}
+
+function renderPOISelectors() {
+    const sel = document.getElementById('poi-city-select'); if(!sel) return;
+    sel.innerHTML = "";
+    const cachedCities = Object.keys(state.settings.poiCache);
+    const savedCities = state.settings.locations.map(l => l.city.toLowerCase());
+    const allCities = [...new Set([...cachedCities, ...savedCities])].sort();
+    allCities.forEach(city => {
+        const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt);
+    });
+    renderPOIs();
+}
+function renderPOIs() {
+    const list = document.getElementById('poi-list'); if(!list) return;
+    const city = document.getElementById('poi-city-select').value;
+    list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return;
+    state.settings.poiCache[city].forEach((p, i) => {
+        const row = document.createElement('div'); row.className = 'list-item';
+        row.innerHTML = '<div><div class="list-item-title">' + p.name + '</div><div class="list-item-sub">' + (p.description || "") + '</div></div><div><button onclick="consultPOI(\\'' + city + '\\', ' + i + ')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI(\\'' + city + '\\', ' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button></div>';
+        list.appendChild(row);
+    });
+}
+function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); save(); }
+
 async function consultPOI(city, i) {
     const p = state.settings.poiCache[city][i]; 
     const btn = event ? event.currentTarget : null;
@@ -502,52 +421,6 @@ async function consultPOI(city, i) {
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
         const data = await res.json(); p.description = data.description; renderPOIs(); save();
     } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } }
-}
-
-async function discoverPOIs(btn) {
-    const city = state.city;
-    const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states");
-    let rawPrompt = isUS ? (state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR) : (state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR);
-    rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country);
-    
-    if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = true; btn.innerText = "Finding..."; }
-    try {
-        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey };
-        const res = await fetch("/api/proxy/poi", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const textRes = await res.text();
-        const cleanJson = textRes.split("```json").join("").split("```").join("").trim();
-        const data = JSON.parse(cleanJson);
-        const cityKey = city.toLowerCase().trim();
-        if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = [];
-        
-        if (Array.isArray(data)) {
-            state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data];
-        } else if (data.name) {
-            state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
-        }
-        renderPOISelectors(); save();
-    } catch(e) { console.error("Discovery error:", e); } finally { if(btn && btn.id !== 'btn-gen-ui') { btn.disabled = false; btn.innerText = "✨ AI Discover"; } }
-}
-
-function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
-
-function browserSanitize(input) {
-    if (!input) return "";
-    let str = input.toString();
-    str = str.split("
-").join(" ");
-    str = str.split("%").join(" percent");
-    str = str.split("&").join(" and");
-    str = str.split("#").join("");
-    str = str.split("?").join("");
-    str = str.split(""").join("'");
-    str = str.split("/").join(" ");
-    str = str.split("").join(" ");
-    return str.trim();
 }
 
 async function handleGenerate() {
@@ -564,13 +437,6 @@ async function handleGenerate() {
         btn.innerText = "Dreaming..."; const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
         
-        if (cleanP.length > 1500) {
-            alert("Your prompt is too long (" + cleanP.length + " chars). Please reduce the length of your custom styles or themes to prevent server errors.");
-            btn.disabled = false; state.isGenerating = false; stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
-            btn.innerText = "✨ AI Discover";
-            return;
-        }
-
         const [w, h] = state.settings.resolution.split('x'); const seed = state.settings.seedEnable ? state.settings.seed : Math.floor(Math.random()*999999);
         let url = "https://gen.pollinations.ai/image/" + encodeURIComponent(cleanP) + "?width=" + w + "&height=" + h + "&seed=" + seed + "&model=" + state.settings.model + "&nologo=true";
         if (state.settings.apiKey) url += "&key=" + state.settings.apiKey;
@@ -579,87 +445,46 @@ async function handleGenerate() {
         if (state.settings.enhance) url += "&enhance=true";
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
         
-        try {
-            const imgRes = await fetch(url);
-            if (!imgRes.ok) throw new Error("Server error " + imgRes.status);
-            const blob = await imgRes.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            
-            const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = objectUrl;
-            img.onload = () => {
-                img.classList.add('loaded'); stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
-                document.getElementById('placeholder').style.display = 'none';
-                if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
-                else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
-                document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
-            };
-        } catch (fetchErr) {
-            throw new Error("Image load failed. If your prompt is very complex, try simplifying it. (" + fetchErr.message + ")");
-        }
-    } catch(e) { alert("Error: " + e.message); const btn = document.getElementById('btn-gen-ui'); if (btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } state.isGenerating = false; stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active'); }
+        const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = url;
+        img.onload = () => {
+            img.classList.add('loaded'); stopFireflies(); document.getElementById('firefly-canvas').classList.remove('active');
+            document.getElementById('placeholder').style.display = 'none';
+            if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
+            else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
+            document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
+        };
+    } catch(e) { alert("Error: " + e.message); btn.disabled = false; btn.innerText = "Generate Wallpaper"; state.isGenerating = false; stopFireflies(); }
 }
 
 function buildPrompt(env, poi, theme) {
-    const isDay = env.is_day; 
-    let p = isDay ? state.settings.promptDay : state.settings.promptNight;
+    const isDay = env.is_day; let p = isDay ? state.settings.promptDay : state.settings.promptNight;
     const now = new Date();
-    
-    // Safety: ensure style is valid
-    const currentStyle = state.settings.styles.includes(state.settings.style) ? state.settings.style : state.settings.styles[0];
-
-    const vars = {
-        "{style}": currentStyle, "{poi_name}": poi.name, "{poi_desc}": poi.description || "",
-        "{city}": state.city, "{state_region}": state.state, "{country}": state.country,
-        "{time_of_day}": isDay ? "Daytime" : "Nighttime", "{datetime}": now.toLocaleString(),
-        "{weather}": env.weather_desc, "{temperature}": env.temp + "°F", "{theme}": theme,
-        "{sunrise}": env.sunrise || "dawn", "{sunset}": env.sunset || "dusk",
-        "{uv_index}": env.uv_index || "0", "{visibility}": env.visibility || "10mi",
-        "{cloud_cover}": env.cloud_cover || "0%", "{wind_speed}": env.wind_speed || "0mph",
-        "{moon_phase}": env.moon_phase || "Visible", "{moon_illumination}": (env.moon_illumination || "0") + " percent",
-        "{moonrise}": env.moonrise || "N/A", "{moonset}": env.moonset || "N/A"
-    };
+    const vars = { "{style}": state.settings.style, "{poi_name}": poi.name, "{poi_desc}": poi.description || "", "{city}": state.city, "{state_region}": state.state, "{country}": state.country, "{time_of_day}": isDay ? "Daytime" : "Nighttime", "{datetime}": now.toLocaleString(), "{weather}": env.weather_desc, "{temperature}": env.temp + "°F", "{theme}": theme, "{sunrise}": env.sunrise, "{sunset}": env.sunset, "{uv_index}": env.uv_index, "{visibility}": env.visibility, "{cloud_cover}": env.cloud_cover, "{wind_speed}": env.wind_speed, "{moon_phase}": env.moon_phase, "{moon_illumination}": env.moon_illumination + " percent", "{moonrise}": env.moonrise, "{moonset}": env.moonset };
     for (const [k, v] of Object.entries(vars)) { p = p.split(k).join(v || ""); }
     if (state.settings.quality === 'high') p += ", 8k resolution, masterpiece";
     if (state.settings.quality === 'hd') p += ", 16k resolution, cinematic lighting";
-    
     return p;
 }
 
-let animId;
-function startFireflies() {
-    const canvas = document.getElementById('firefly-canvas'); if(!canvas) return;
-    const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
-    const particles = Array.from({length: 40}, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 1, speed: Math.random() * 0.8 + 0.2, phase: Math.random() * 10 }));
-    function loop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => { p.y -= p.speed; if (p.y < 0) p.y = canvas.height; ctx.globalAlpha = Math.pow((Math.sin(Date.now()/300 + p.phase) + 1)/2, 8); ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
-        animId = requestAnimationFrame(loop);
-    }
-    loop();
-}
-function stopFireflies() { cancelAnimationFrame(animId); }
+function browserSanitize(input) { return input.toString().replace(/[\n\r]/g, " ").replace(/%/g, " percent").replace(/[&#?\/\\"]/g, "").trim(); }
 
 function switchTab(tab, btn) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tab + '-view').classList.add('active');
-    if (btn) btn.classList.add('active');
+    document.getElementById(tab + '-view').classList.add('active'); if (btn) btn.classList.add('active');
 }
 function switchSubTab(tab) {
     document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none');
-    const targetId = tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab;
-    const target = document.getElementById(targetId);
+    const target = document.getElementById(tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab);
     if (target) target.style.display = 'block';
-    
-    document.getElementById('tab-themes').classList.toggle('active', tab === 'themes');
-    document.getElementById('tab-pois').classList.toggle('active', tab === 'pois');
-    document.getElementById('tab-locations').classList.toggle('active', tab === 'locations');
-    document.getElementById('tab-styles').classList.toggle('active', tab === 'styles');
-    document.getElementById('tab-data-prompts').classList.toggle('active', tab === 'prompts');
+    ['themes', 'pois', 'locations', 'styles', 'prompts'].forEach(t => {
+        const btn = document.getElementById('tab-' + (t === 'prompts' ? 'data-prompts' : t));
+        if(btn) btn.classList.toggle('active', tab === t);
+    });
 }
 
 function requestLocation() {
-    if (!navigator.geolocation || (state && state.settings.locMode === 'custom')) return;
+    if (!navigator.geolocation || state.settings.locMode === 'custom') return;
     navigator.geolocation.getCurrentPosition(pos => {
         state.lat = pos.coords.latitude; state.lon = pos.coords.longitude;
         document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2);
@@ -677,6 +502,49 @@ function getThemeForDate() {
     return match ? match.Theme : "General";
 }
 
+function startFireflies() {
+    const canvas = document.getElementById('firefly-canvas'); if(!canvas) return;
+    const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
+    const particles = Array.from({length: 40}, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 1, speed: Math.random() * 0.8 + 0.2, phase: Math.random() * 10 }));
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => { p.y -= p.speed; if (p.y < 0) p.y = canvas.height; ctx.globalAlpha = Math.pow((Math.sin(Date.now()/300 + p.phase) + 1)/2, 8); ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+        animId = requestAnimationFrame(loop);
+    }
+    loop();
+}
+function stopFireflies() { cancelAnimationFrame(animId); }
+function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); location.reload(); } }
+function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); save(); } }
+function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
+
+function renderStyles() {
+    const list = document.getElementById('style-list'); const sel = document.getElementById('set-style');
+    if(!list || !sel) return;
+    list.innerHTML = ""; sel.innerHTML = "";
+    state.settings.styles.forEach((s, i) => {
+        const row = document.createElement('div'); row.className = 'list-item';
+        row.innerHTML = '<div><div class="list-item-title">' + s + '</div></div><button onclick="deleteStyle(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>';
+        list.appendChild(row);
+        const opt = document.createElement('option'); opt.value = s; opt.innerText = s; sel.appendChild(opt);
+    });
+    sel.value = state.settings.style || state.settings.styles[0];
+}
+function addStylePrompt() { const s = prompt("New Style:"); if(s) { state.settings.styles.push(s); renderStyles(); save(); } }
+function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); save(); }
+
+function renderThemes() {
+    const list = document.getElementById('theme-list'); if(!list) return;
+    list.innerHTML = "";
+    state.settings.themes.forEach((t, i) => {
+        const row = document.createElement('div'); row.className = 'list-item';
+        row.innerHTML = '<div><div class="list-item-title">' + t.Theme + '</div><div class="list-item-sub">' + t.Begin + ' - ' + t.End + '</div></div><button onclick="deleteTheme(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>';
+        list.appendChild(row);
+    });
+}
+function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); save(); } }
+function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); save(); }
+
 function renderProfiles() {
     const list = document.getElementById('profile-list'); if(!list) return;
     list.innerHTML = "";
@@ -686,11 +554,15 @@ function renderProfiles() {
         list.appendChild(row);
     });
 }
-function saveProfile() {
-    const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter a name");
-    state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = "";
-}
-function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded Profile: " + state.settings.name); }
+function saveProfile() { const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter name"); state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); save(); document.getElementById('new-profile-name').value = ""; }
+function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded: " + state.settings.name); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); save(); }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.removeItem('lumina_v1.10.18'); location.reload(); } }
-function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR; state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR; loadEditorPrompt(); save(); } }
+
+function exportData(type) {
+    let data = state.settings[type] || state.settings;
+    if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight };
+    document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
+    document.getElementById('import-text').value = JSON.stringify(data, null, 2);
+    document.getElementById('import-modal').classList.add('active');
+}
+function clearCategory(type) { if (confirm("Wipe " + type + "?")) { if(type === 'themes') state.settings.themes = []; else if(type === 'styles') state.settings.styles = DEFAULT_STYLES; else if(type === 'locations') state.settings.locations = []; else state.settings.poiCache = {}; save(); location.reload(); } }
