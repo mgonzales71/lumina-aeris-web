@@ -360,7 +360,6 @@ export async function onRequest(context) {
                 is_day: isDay
             }), { headers: getCorsHeaders() });
         }
-        }
 
         return new Response("Not Found", { status: 404, headers: getCorsHeaders() });
     } catch (err) {
