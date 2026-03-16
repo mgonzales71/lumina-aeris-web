@@ -249,17 +249,24 @@ export async function onRequest(context) {
 
             const cityKey = `poi:${(city || "Unknown").toLowerCase().trim()}`;
 
-            // Check KV for cached POIs
+            // Check Cache: 1. Profile-specific cache, 2. Global KV cache
             let pois = [];
-            if (env.LUMINA_SETTINGS) {
+            
+            // 1. Check Profile Cache
+            if (config.poiCache && config.poiCache[city.toLowerCase()]) {
+                pois = config.poiCache[city.toLowerCase()];
+            }
+            
+            // 2. Check Global KV Cache if profile cache is empty
+            if (pois.length === 0 && env.LUMINA_SETTINGS) {
                 try { 
                     const poiListRaw = await env.LUMINA_SETTINGS.get(cityKey); 
                     if (poiListRaw) pois = JSON.parse(poiListRaw);
                 } catch(e) {}
             }
 
-            // If no POIs cached, run Discovery
-            if (pois.length === 0) {
+            // 3. If still no POIs, run Discovery
+            if (!Array.isArray(pois) || pois.length === 0) {
                 const isUS = country.toLowerCase().includes("usa") || country.toLowerCase().includes("united states");
                 let discPrompt = isUS ? (config.promptPOIDomestic || SHARED_DEFAULT_POI_DOMESTIC) : (config.promptPOIIntl || SHARED_DEFAULT_POI_INTL);
                 discPrompt = discPrompt.split("{city}").join(city).split("{state_region}").join(state_region).split("{country}").join(country);
@@ -291,10 +298,15 @@ export async function onRequest(context) {
                 }
             }
 
-            // Pick a random POI
-            const poi = pois[Math.floor(Math.random() * pois.length)];
+            // Final fallback if discovery failed to return a valid array
+            if (!Array.isArray(pois) || pois.length === 0) {
+                pois = [{ name: city, description: "A beautiful local view." }];
+            }
 
-            // Weather & Astro
+            // Pick a random POI
+            const poi = pois[Math.floor(Math.random() * pois.length)] || { name: city, description: "A beautiful local view." };
+
+            // Weather & Astro --- [REST OF LOGIC] ---
             const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,visibility,cloud_cover,wind_speed_10m&daily=uv_index_max&timezone=auto`);
             const d = await weatherRes.json();
             const dateStr = new Date().toISOString().split('T')[0];
@@ -322,7 +334,7 @@ export async function onRequest(context) {
             const theme = match ? match.Theme : "General";
             
             const vars = {
-                "{poi_name}": poi.name, "{poi_desc}": poi.description || "", "{city}": city, "{state_region}": state_region, "{country}": country,
+                "{poi_name}": poi.name || city, "{poi_desc}": poi.description || "A majestic view", "{city}": city, "{state_region}": state_region, "{country}": country,
                 "{time_of_day}": isDay ? "Daytime" : "Nighttime", "{datetime}": now.toLocaleString(),
                 "{weather}": WMO_MAP[d.current.weather_code] || "Clear", "{temperature}": Math.round(d.current.temperature_2m * 9/5 + 32) + "°F", "{theme}": theme,
                 "{sunrise}": astro.sunrise, "{sunset}": astro.sunset, "{uv_index}": d.daily.uv_index_max[0], "{visibility}": (d.current.visibility / 1609).toFixed(1) + "mi",
@@ -341,12 +353,13 @@ export async function onRequest(context) {
             
             return new Response(JSON.stringify({ 
                 imageUrl: finalImgUrl, 
-                poiLabel: poi.name, 
+                poiLabel: poi.name || city, 
                 prompt: cleanP,
                 city: city,
                 theme: theme,
                 is_day: isDay
             }), { headers: getCorsHeaders() });
+        }
         }
 
         return new Response("Not Found", { status: 404, headers: getCorsHeaders() });
