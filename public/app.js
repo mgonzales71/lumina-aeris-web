@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - App Logic v1.12.0
+// Lumina Aeris Web & Worker - App Logic v1.14.0
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
@@ -29,7 +29,7 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.12.1');
+    const saved = localStorage.getItem('lumina_v1.14.0');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
@@ -75,14 +75,14 @@ async function switchRemoteProfile(name) {
                 state.settings = remote;
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
-                localStorage.setItem('lumina_v1.12.1', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.14.0', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) { console.error("KV Pull failed", e); }
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.12.1', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.14.0', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -640,3 +640,46 @@ function exportData(type) {
     document.getElementById('import-modal').classList.add('active');
 }
 function clearCategory(type) { if (confirm("Wipe " + type + "?")) { if(type === 'themes') state.settings.themes = []; else if(type === 'styles') state.settings.styles = DEFAULT_STYLES; else if(type === 'locations') state.settings.locations = []; else state.settings.poiCache = {}; save(); location.reload(); } }
+
+// --- EXPORTS ---
+window.switchTab = switchTab;
+window.switchSubTab = switchSubTab;
+window.handleGenerate = handleGenerate;
+window.openFullRes = openFullRes;
+window.resetApp = resetApp;
+window.resetPrompts = resetPrompts;
+window.syncSettings = syncSettings;
+window.loadEditorPrompt = loadEditorPrompt;
+window.saveEditorPrompt = saveEditorPrompt;
+window.openImport = openImport;
+window.confirmImport = confirmImport;
+window.closeImport = closeImport;
+window.exportData = exportData;
+window.clearCategory = clearCategory;
+window.openPOIModal = openPOIModal;
+window.closePOIModal = closePOIModal;
+window.savePOIModal = savePOIModal;
+window.sanitizePOIModal = sanitizePOIModal;
+window.deletePOI = deletePOI;
+window.consultPOI = consultPOI;
+window.discoverPOIs = discoverPOIs;
+window.deleteCity = deleteCity;
+window.openLocationModal = openLocationModal;
+window.closeLocationModal = closeLocationModal;
+window.saveLocationModal = saveLocationModal;
+window.autofillLocation = autofillLocation;
+window.deleteLocation = deleteLocation;
+window.applySavedLoc = applySavedLoc;
+window.toggleCustomLoc = toggleCustomLoc;
+window.addStylePrompt = addStylePrompt;
+window.deleteStyle = deleteStyle;
+window.addThemePrompt = addThemePrompt;
+window.deleteTheme = deleteTheme;
+window.saveProfile = saveProfile;
+window.loadProfile = loadProfile;
+window.deleteProfile = deleteProfile;
+window.createRemoteProfile = createRemoteProfile;
+window.switchRemoteProfile = switchRemoteProfile;
+window.deleteRemoteProfile = deleteRemoteProfile;
+window.purgeCloudData = purgeCloudData;
+window.refreshRemoteProfiles = refreshRemoteProfiles;
