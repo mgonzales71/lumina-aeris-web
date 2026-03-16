@@ -235,7 +235,7 @@ function saveEditorPrompt() {
     save();
 }
 
-function syncSettings() {
+async function syncSettings() {
     state.settings.quality = document.getElementById('set-quality').value;
     state.settings.model = document.getElementById('set-model').value;
     if (document.getElementById('set-text-model')) state.settings.textModel = document.getElementById('set-text-model').value;
@@ -243,7 +243,10 @@ function syncSettings() {
     state.settings.style = document.getElementById('set-style').value;
     state.settings.overlayLabel = document.getElementById('set-overlay').checked;
     state.settings.apiKey = document.getElementById('set-apikey').value;
-    if (document.getElementById('set-sync-secret')) state.settings.syncSecret = document.getElementById('set-sync-secret').value;
+    
+    const oldSecret = state.settings.syncSecret;
+    const newSecret = document.getElementById('set-sync-secret') ? document.getElementById('set-sync-secret').value : "";
+    
     state.settings.locMode = document.getElementById('set-loc-mode').value;
     state.settings.transparent = document.getElementById('set-transparent').checked;
     state.settings.safe = document.getElementById('set-safe').checked;
@@ -252,7 +255,15 @@ function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
-    save();
+
+    if (newSecret && newSecret !== oldSecret) {
+        state.settings.syncSecret = newSecret;
+        // If the secret just changed, try to PULL first instead of pushing defaults
+        await refreshRemoteProfiles();
+        await switchRemoteProfile(state.currentProfile || 'default');
+    } else {
+        save();
+    }
 }
 
 function toggleCustomLoc() {
