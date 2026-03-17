@@ -181,6 +181,18 @@ export async function onRequest(context) {
             return new Response(JSON.stringify(await res.json()), { headers: getCorsHeaders() });
         }
 
+        // --- 4b. Pollinations Account Proxy ---
+        if (path === "/api/proxy/account") {
+            const key = url.searchParams.get("key");
+            if (!key) return new Response(JSON.stringify({ error: "No API key provided" }), { status: 400, headers: getCorsHeaders() });
+
+            const res = await fetch("https://enter.pollinations.ai/account/profile", {
+                headers: { "Authorization": `Bearer ${key}` }
+            });
+            const data = await res.json();
+            return new Response(JSON.stringify(data), { headers: getCorsHeaders() });
+        }
+
         // --- 5. KV Config Management (Multi-Profile) ---
         if (path === "/api/config") {
             const secret = request.headers.get("X-Lumina-Secret") || url.searchParams.get("secret");
