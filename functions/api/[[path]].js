@@ -182,25 +182,19 @@ export async function onRequest(context) {
         }
 
         // --- 4b. Pollinations Account Proxy ---
-        if (path === "/api/proxy/account") {
+        if (path.startsWith("/api/proxy/account/")) {
             const key = url.searchParams.get("key");
             if (!key) return new Response(JSON.stringify({ error: "No API key provided" }), { status: 400, headers: getCorsHeaders() });
 
+            const subPath = path.replace("/api/proxy/account/", ""); // e.g. "profile" or "balance"
             try {
-                // gen.pollinations.ai is the correct base for account APIs
-                const res = await fetch("https://gen.pollinations.ai/account/profile", {
+                const res = await fetch(`https://gen.pollinations.ai/account/${subPath}`, {
                     headers: { "Authorization": `Bearer ${key}` }
                 });
                 
                 if (!res.ok) {
                     const statusText = await res.text();
                     return new Response(JSON.stringify({ error: `Pollinations API error: ${res.status}`, detail: statusText.substring(0, 100) }), { status: res.status, headers: getCorsHeaders() });
-                }
-
-                const contentType = res.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    const text = await res.text();
-                    return new Response(JSON.stringify({ error: "API returned non-JSON response", detail: text.substring(0, 100) }), { status: 500, headers: getCorsHeaders() });
                 }
 
                 const data = await res.json();

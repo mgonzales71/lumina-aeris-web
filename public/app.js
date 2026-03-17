@@ -29,7 +29,7 @@ var state = {
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.15.1');
+    const saved = localStorage.getItem('lumina_v1.15.2');
     if (saved) {
         try { 
             const parsed = JSON.parse(saved);
@@ -75,14 +75,14 @@ async function switchRemoteProfile(name) {
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations();
                 renderRemoteProfileList();
-                localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) { console.error("KV Pull failed", e); }
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -148,7 +148,7 @@ function confirmImport() {
         else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
         else if (state.importType === 'full') { Object.assign(state.settings, parsed); setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); }
         else if (state.importType === 'prompts') { state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; loadEditorPrompt(); }
-        localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+        localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
         alert("Import successful! Remember to Sync to Cloud."); closeImport();
     } catch(e) { console.error("Parse Error Detail:", e); alert("Import failed. Error: " + e.message); }
 }
@@ -239,7 +239,7 @@ function saveEditorPrompt() {
     else if (mode === 'night') state.settings.promptNight = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
-    localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
 }
 
 async function syncSettings() {
@@ -265,7 +265,7 @@ async function syncSettings() {
         await refreshRemoteProfiles();
         await switchRemoteProfile(state.currentProfile || 'default');
     } else {
-        localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+        localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
     }
 }
 
@@ -292,7 +292,7 @@ function applySavedLoc(forceIdx) {
     const loc = state.settings.locations[idx]; if (!loc) return;
     state.lat = loc.lat; state.lon = loc.lon; state.city = loc.city; state.state = loc.state || ""; state.country = loc.country || "";
     document.getElementById('coord-text').innerText = "SAVED: " + state.lat.toFixed(2);
-    localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); 
 }
 
 function openLocationModal() {
@@ -315,7 +315,7 @@ async function autofillLocation() {
 function saveLocationModal() {
     const city = document.getElementById('modal-loc-city').value; const lat = parseFloat(document.getElementById('modal-loc-lat').value); const lon = parseFloat(document.getElementById('modal-loc-lon').value); if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon are required");
     state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
-    renderLocations(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); closeLocationModal();
+    renderLocations(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); closeLocationModal();
 }
 function renderLocations() {
     const list = document.getElementById('location-list'); if(!list) return; list.innerHTML = "";
@@ -326,7 +326,7 @@ function renderLocations() {
     });
     renderPOISelectors(); 
 }
-function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); }
+function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); }
 
 function openPOIModal() {
     const sel = document.getElementById('modal-poi-city'); sel.innerHTML = "";
@@ -345,7 +345,7 @@ async function sanitizePOIModal() {
 function savePOIModal() {
     const city = document.getElementById('modal-poi-city').value; const name = document.getElementById('modal-poi-name').value; const description = document.getElementById('modal-poi-desc').value; if (!city || !name) return alert("City and Name required");
     if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; state.settings.poiCache[city].push({name, description});
-    renderPOISelectors(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); closePOIModal();
+    renderPOISelectors(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); closePOIModal();
 }
 async function discoverPOIs(btn) {
     const city = state.city; const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states");
@@ -359,7 +359,7 @@ async function discoverPOIs(btn) {
         if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = [];
         if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data];
         else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description});
-        renderPOISelectors(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings));
+        renderPOISelectors(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings));
     } catch(e) { console.error("Discovery error:", e); } finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } }
 }
 function renderPOISelectors() {
@@ -379,16 +379,16 @@ function renderPOIs() {
         list.appendChild(row);
     });
 }
-function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); }
+function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); }
 function deleteCity() {
     const city = document.getElementById('poi-city-select').value; if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return;
-    delete state.settings.poiCache[city]; renderPOISelectors(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings));
+    delete state.settings.poiCache[city]; renderPOISelectors(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings));
 }
 async function consultPOI(city, i) {
     const p = state.settings.poiCache[city][i]; const btn = event ? event.currentTarget : null; if(btn) { btn.disabled = true; btn.innerText = "..."; }
     try {
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : ""));
-        const data = await res.json(); p.description = data.description; renderPOIs(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings));
+        const data = await res.json(); p.description = data.description; renderPOIs(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings));
     } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } }
 }
 
@@ -441,21 +441,21 @@ function startFireflies() {
 }
 function stopFireflies() { cancelAnimationFrame(animId); }
 function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); location.reload(); } }
-function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); } }
+function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); } }
 function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
 function renderStyles() {
     const list = document.getElementById('style-list'); const sel = document.getElementById('set-style'); if(!list || !sel) return; list.innerHTML = ""; sel.innerHTML = "";
     state.settings.styles.forEach((s, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = '<div><div class="list-item-title">' + s + '</div></div><button onclick="deleteStyle(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>'; list.appendChild(row); const opt = document.createElement('option'); opt.value = s; opt.innerText = s; sel.appendChild(opt); });
     sel.value = state.settings.style || state.settings.styles[0];
 }
-function addStylePrompt() { const s = prompt("New Style:"); if(s) { state.settings.styles.push(s); renderStyles(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); } }
-function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); }
+function addStylePrompt() { const s = prompt("New Style:"); if(s) { state.settings.styles.push(s); renderStyles(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); } }
+function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); }
 function renderThemes() {
     const list = document.getElementById('theme-list'); if(!list) return; list.innerHTML = "";
     state.settings.themes.forEach((t, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = '<div><div class="list-item-title">' + t.Theme + '</div><div class="list-item-sub">' + t.Begin + ' - ' + t.End + '</div></div><button onclick="deleteTheme(' + i + ')" style="color:#ff3b30; background:none; border:none;">Del</button>'; list.appendChild(row); });
 }
-function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); } }
-function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); }
+function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); } }
+function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); }
 function renderProfiles() {
     const list = document.getElementById('profile-list'); if(!list) return; list.innerHTML = "";
     state.settings.profiles.forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div><div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); });
@@ -480,28 +480,39 @@ async function fetchUsageStats() {
     if (!key) { container.innerHTML = "No API key found in current profile."; return; }
     container.innerHTML = "Fetching stats...";
     try {
-        const res = await fetch(`/api/proxy/account?key=${encodeURIComponent(key)}`);
-        if (!res.ok) { const errData = await res.json(); throw new Error(errData.detail || "Failed to fetch stats"); }
-        const data = await res.json();
-        const balance = data.balance !== undefined ? `${data.balance} Pollen` : (data.totalBalance !== undefined ? `${data.totalBalance} Pollen` : "N/A");
-        const tier = data.tier || "Standard";
+        // Fetch Profile
+        const pRes = await fetch(`/api/proxy/account/profile?key=${encodeURIComponent(key)}`);
+        const pData = await pRes.json();
+        
+        // Fetch Balance
+        const bRes = await fetch(`/api/proxy/account/balance?key=${encodeURIComponent(key)}`);
+        const bData = await bRes.json();
+        
+        if (pData.error || bData.error) throw new Error(pData.error || bData.error);
+        
+        const balance = bData.totalBalance !== undefined ? `${bData.totalBalance} Pollen` : (pData.balance !== undefined ? `${pData.balance} Pollen` : "N/A");
+        const tier = pData.tier || "Standard";
+        
         container.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <span>Balance:</span><span style="color: #fff; font-weight: bold;">${balance}</span>
+                <span>Total Balance:</span><span style="color: #fff; font-weight: bold;">${balance}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span>Account Tier:</span><span style="color: #fff; font-weight: bold;">${tier}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-                <span>Account Tier:</span><span style="color: #fff; font-weight: bold;">${tier}</span>
+                <span>Tier Grant:</span><span style="color: #aaa; font-size: 11px;">${bData.tierBalance || 0} Pollen</span>
             </div>`;
     } catch(e) { container.innerHTML = `Error: ${e.message}. Verify your API key.`; console.error(e); }
 }
-function saveProfile() { const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter name"); state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); document.getElementById('new-profile-name').value = ""; }
+function saveProfile() { const name = document.getElementById('new-profile-name').value; if (!name) return alert("Enter name"); state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); document.getElementById('new-profile-name').value = ""; }
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); alert("Loaded: " + state.settings.name); }
-function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); }
+function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); }
 function exportData(type) {
     let data; if (type === 'pois') data = state.settings.poiCache; else if (type === 'themes') data = state.settings.themes; else if (type === 'styles') data = state.settings.styles; else if (type === 'locations') data = state.settings.locations; else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight }; else data = state.settings;
     document.getElementById('import-title').innerText = "Export " + type.toUpperCase(); document.getElementById('import-text').value = JSON.stringify(data, null, 2); document.getElementById('import-modal').classList.add('active');
 }
-function clearCategory(type) { if (confirm("Wipe " + type + "?")) { if(type === 'themes') state.settings.themes = []; else if(type === 'styles') state.settings.styles = DEFAULT_STYLES; else if(type === 'locations') state.settings.locations = []; else state.settings.poiCache = {}; localStorage.setItem('lumina_v1.15.1', JSON.stringify(state.settings)); location.reload(); } }
+function clearCategory(type) { if (confirm("Wipe " + type + "?")) { if(type === 'themes') state.settings.themes = []; else if(type === 'styles') state.settings.styles = DEFAULT_STYLES; else if(type === 'locations') state.settings.locations = []; else state.settings.poiCache = {}; localStorage.setItem('lumina_v1.15.2', JSON.stringify(state.settings)); location.reload(); } }
 
 // --- EXPORTS ---
 window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = clearCategory; window.openPOIModal = openPOIModal; window.closePOIModal = closePOIModal; window.savePOIModal = savePOIModal; window.sanitizePOIModal = sanitizePOIModal; window.deletePOI = deletePOI; window.consultPOI = consultPOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = openLocationModal; window.closeLocationModal = closeLocationModal; window.saveLocationModal = saveLocationModal; window.autofillLocation = autofillLocation; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats;
