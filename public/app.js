@@ -110,7 +110,37 @@ async function manualCloudSync() {
     catch(e) { btn.innerText = "❌ Error"; setTimeout(() => { btn.innerText = orig; btn.disabled = false; }, 2000); }
 }
 
-// --- 3. UI HANDLERS ---
+async function fetchModels() {
+    try {
+        const res = await fetch('https://gen.pollinations.ai/image/models');
+        const models = await res.json();
+        const sel = document.getElementById('set-model');
+        if (sel) {
+            sel.innerHTML = "";
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name; opt.innerText = m.name + (m.paid_only ? ' *' : '');
+                sel.appendChild(opt);
+            });
+            sel.value = state.settings.model || "gptimage";
+        }
+    } catch(e) {}
+    try {
+        const txtRes = await fetch('https://gen.pollinations.ai/text/models');
+        const txtModels = await txtRes.json();
+        const tsel = document.getElementById('set-text-model');
+        if (tsel) {
+            tsel.innerHTML = "";
+            txtModels.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name; opt.innerText = m.name + (m.paid_only ? ' *' : '');
+                tsel.appendChild(opt);
+            });
+            tsel.value = state.settings.textModel || "gemini-search";
+        }
+    } catch(e) {}
+}
+
 function setupUI() {
     loadEditorPrompt();
     const badge = document.getElementById('profile-badge');
@@ -138,12 +168,41 @@ function setupUI() {
     toggleCustomLoc(); toggleCustomRes(); renderTokens();
 }
 
-function toggleCustomRes() {
-    const isCustom = document.getElementById('set-res').value === 'custom';
-    document.getElementById('row-custom-res').style.display = isCustom ? 'flex' : 'none';
+function renderTokens() {
+    const chipContainer = document.getElementById('token-chips');
+    if(!chipContainer) return;
+    chipContainer.innerHTML = "";
+    TOKENS_LIST.forEach(t => {
+        const c = document.createElement('div');
+        c.className = 'chip'; c.innerText = t;
+        c.onclick = () => {
+            const area = document.getElementById('prompt-editor');
+            const start = area.selectionStart; const end = area.selectionEnd;
+            area.setRangeText(t, start, end, 'end'); saveEditorPrompt();
+        };
+        chipContainer.appendChild(c);
+    });
 }
 
-function syncSettings() {
+function loadEditorPrompt() {
+    const mode = document.getElementById('prompt-mode').value;
+    if (mode === 'day') document.getElementById('prompt-editor').value = state.settings.promptDay;
+    else if (mode === 'night') document.getElementById('prompt-editor').value = state.settings.promptNight;
+    else if (mode === 'poidomestic') document.getElementById('prompt-editor').value = state.settings.promptPOIDomestic || DEFAULT_POI_DOMESTIC_STR;
+    else if (mode === 'poiintl') document.getElementById('prompt-editor').value = state.settings.promptPOIIntl || DEFAULT_POI_INTL_STR;
+}
+
+function saveEditorPrompt() {
+    const mode = document.getElementById('prompt-mode').value;
+    const val = document.getElementById('prompt-editor').value;
+    if (mode === 'day') state.settings.promptDay = val;
+    else if (mode === 'night') state.settings.promptNight = val;
+    else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
+    else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
+    localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); 
+}
+
+async function syncSettings() {
     state.settings.appearance = document.getElementById('set-appearance').value;
     state.settings.quality = document.getElementById('set-quality').value;
     state.settings.model = document.getElementById('set-model').value;
@@ -164,6 +223,12 @@ function syncSettings() {
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
     localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); 
+}
+
+function toggleCustomRes() {
+    const isCustom = document.getElementById('set-res').value === 'custom';
+    const row = document.getElementById('row-custom-res');
+    if (row) row.style.display = isCustom ? 'flex' : 'none';
 }
 
 async function handleGenerate() {
@@ -203,28 +268,12 @@ async function handleGenerate() {
         img.onload = () => {
             img.classList.add('loaded'); stopTransporterEffect(); 
             document.getElementById('placeholder').style.display = 'none';
-            
-            // Smart Overlay Logic: Hide if {poi_name} was not in the prompt template
             const activeTemplate = env.is_day ? state.settings.promptDay : state.settings.promptNight;
             const hasPOI = activeTemplate.includes("{poi_name}");
-            
             if (hasPOI) {
-                if (state.settings.overlayLabel) { 
-                    document.getElementById('poi-label').innerText = poi.name; 
-                    document.getElementById('poi-label').style.display = 'block'; 
-                    document.getElementById('info-overlay').style.display = 'none'; 
-                } else { 
-                    document.getElementById('poi-label').style.display = 'none'; 
-                    document.getElementById('info-overlay').style.display = 'block'; 
-                    document.getElementById('theme-tag').innerText = theme.toUpperCase(); 
-                    document.getElementById('poi-name').innerText = poi.name; 
-                    document.getElementById('poi-desc').innerText = poi.description || ""; 
-                }
-            } else {
-                document.getElementById('poi-label').style.display = 'none';
-                document.getElementById('info-overlay').style.display = 'none';
-            }
-            
+                if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
+                else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
+            } else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'none'; }
             document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
         };
     } catch(e) { alert("Error: " + e.message); btn.disabled = false; btn.innerText = "Generate Wallpaper"; state.isGenerating = false; stopTransporterEffect(); }
@@ -242,37 +291,17 @@ function browserSanitize(input) { return input.toString().replace(/[\n\r]/g, " "
 function startTransporterEffect() {
     const canvas = document.getElementById('firefly-canvas'); canvas.classList.add('active');
     const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
-    const particles = Array.from({length: 60}, () => ({ 
-        x: Math.random() * canvas.width, y: Math.random() * canvas.height, 
-        size: Math.random() * 2 + 1, speed: Math.random() * 2 + 0.5,
-        beam: Math.random() > 0.8, beamH: Math.random() * 100 + 50
-    }));
+    const particles = Array.from({length: 60}, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 1, speed: Math.random() * 2 + 0.5, beam: Math.random() > 0.8, beamH: Math.random() * 100 + 50 }));
     function loop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => {
-            p.y -= p.speed; if (p.y < -100) p.y = canvas.height + 100;
-            const alpha = 0.3 + Math.sin(Date.now()/200 + p.x) * 0.3;
-            if (p.beam) {
-                ctx.fillStyle = `rgba(255, 200, 100, ${alpha * 0.5})`;
-                ctx.fillRect(p.x, p.y, 1, p.beamH);
-            }
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-        });
+        particles.forEach(p => { p.y -= p.speed; if (p.y < -100) p.y = canvas.height + 100; const alpha = 0.3 + Math.sin(Date.now()/200 + p.x) * 0.3; if (p.beam) { ctx.fillStyle = `rgba(255, 200, 100, ${alpha * 0.5})`; ctx.fillRect(p.x, p.y, 1, p.beamH); } ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
         animId = requestAnimationFrame(loop);
     }
     loop();
 }
 function stopTransporterEffect() { cancelAnimationFrame(animId); document.getElementById('firefly-canvas').classList.remove('active'); }
+function toggleAccordion(id) { const el = document.getElementById(id); const chev = document.getElementById('debug-chevron'); const isOpen = el.style.display === 'block'; el.style.display = isOpen ? 'none' : 'block'; chev.innerText = isOpen ? '▼' : '▲'; }
 
-function toggleAccordion(id) {
-    const el = document.getElementById(id); const chev = document.getElementById('debug-chevron');
-    const isOpen = el.style.display === 'block';
-    el.style.display = isOpen ? 'none' : 'block';
-    chev.innerText = isOpen ? '▼' : '▲';
-}
-
-// UI Boilerplate
 function switchTab(tab, btn) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(tab + '-view').classList.add('active'); if (btn) btn.classList.add('active'); }
 function switchSubTab(tab) { document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none'); const target = document.getElementById(tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab); if (target) target.style.display = 'block'; document.querySelectorAll('.tabs-sub button').forEach(b => b.classList.remove('active')); const activeBtn = document.getElementById('tab-' + tab); if (activeBtn) activeBtn.classList.add('active'); }
 function requestLocation() { if (!navigator.geolocation || state.settings.locMode === 'custom') return; navigator.geolocation.getCurrentPosition(pos => { state.lat = pos.coords.latitude; state.lon = pos.coords.longitude; document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2); fetch("/api/proxy/nominatim?lat=" + state.lat + "&lon=" + state.lon).then(r => r.json()).then(data => { state.city = data.address.city || data.address.town || data.address.village || "Unknown"; state.state = data.address.state || ""; state.country = data.address.country || ""; renderPOISelectors(); }); }); }
@@ -281,7 +310,6 @@ function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); lo
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); } }
 function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
 
-// Profile Management Boilerplate
 function renderProfiles() { const list = document.getElementById('profile-list'); if(!list) return; list.innerHTML = ""; state.settings.profiles.forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div><div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
 function renderRemoteProfileList() { const list = document.getElementById('remote-profile-list'); if(!list) return; list.innerHTML = ""; state.remoteProfiles.forEach(name => { const row = document.createElement('div'); row.className = 'list-item'; const active = (name === state.currentProfile) ? " (Active)" : ""; row.innerHTML = `<div><div class="list-item-title">${name}${active}</div><div class="list-item-sub">Cloud</div></div><div><button onclick="switchRemoteProfile('${name}')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Switch</button><button onclick="deleteRemoteProfile('${name}')" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
 async function deleteRemoteProfile(name) { if (name === 'default') return alert("Cannot delete default profile"); if (!confirm(`Delete cloud profile '${name}'?`)) return; try { await fetch(`/api/config?profile=${encodeURIComponent(name)}&secret=${encodeURIComponent(state.settings.syncSecret)}`, { method: 'DELETE' }); await refreshRemoteProfiles(); } catch(e) {} }
@@ -291,18 +319,17 @@ function saveProfile() { const name = prompt("Profile Name:"); if (!name) return
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); applyAppearance(); alert("Loaded!"); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); }
 
-// Data Management Boilerplate
-function renderLocations() { const list = document.getElementById('location-list'); if(!list) return; list.innerHTML = ""; state.settings.locations.forEach((loc, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})">Del</button>`; list.appendChild(row); }); renderPOISelectors(); }
+function renderLocations() { const list = document.getElementById('location-list'); if(!list) return; list.innerHTML = ""; state.settings.locations.forEach((loc, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); renderPOISelectors(); }
 function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); }
 function renderPOISelectors() { const sel = document.getElementById('poi-city-select'); if(!sel) return; sel.innerHTML = ""; const cities = Object.keys(state.settings.poiCache).sort(); cities.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.innerText = c.toUpperCase(); sel.appendChild(opt); }); renderPOIs(); }
-function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description}</div></div><button onclick="deletePOI('${city}', ${i})">Del</button>`; list.appendChild(row); }); }
+function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description}</div></div><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
 function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); }
 function deleteCity() { const city = document.getElementById('poi-city-select').value; if (city) { delete state.settings.poiCache[city]; renderPOISelectors(); } }
 async function discoverPOIs(btn) { const city = state.city; const payload = { prompt: state.settings.promptPOIDomestic.split('{city}').join(city), model: state.settings.textModel }; const res = await fetch("/api/proxy/poi", { method: 'POST', body: JSON.stringify(payload) }); const data = await res.json(); state.settings.poiCache[city.toLowerCase()] = data; renderPOISelectors(); }
-function renderThemes() { const list = document.getElementById('theme-list'); if(!list) return; list.innerHTML = ""; state.settings.themes.forEach((t, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})">Del</button>`; list.appendChild(row); }); }
+function renderThemes() { const list = document.getElementById('theme-list'); if(!list) return; list.innerHTML = ""; state.settings.themes.forEach((t, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
 function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); } }
 function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); }
-function renderStyles() { const list = document.getElementById('style-list'); if(!list) return; list.innerHTML = ""; state.settings.styles.forEach((s, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})">Del</button>`; list.appendChild(row); }); }
+function renderStyles() { const list = document.getElementById('style-list'); if(!list) return; list.innerHTML = ""; state.settings.styles.forEach((s, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
 function addStylePrompt() { const s = prompt("New Style:"); if(s) { state.settings.styles.push(s); renderStyles(); } }
 function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); }
 
@@ -323,7 +350,50 @@ function exportData(type) {
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
 }
-function confirmImport() { /* same self-healing logic as v1.14.5 */ }
 
-// Final Exports
-window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = (t) => { state.settings[t] = []; location.reload(); }; window.openPOIModal = () => { document.getElementById('poi-modal').classList.add('active'); }; window.closePOIModal = () => { document.getElementById('poi-modal').classList.remove('active'); }; window.savePOIModal = () => { /* logic */ }; window.sanitizePOIModal = () => { /* logic */ }; window.deletePOI = deletePOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = () => { document.getElementById('loc-modal').classList.add('active'); }; window.closeLocationModal = () => { document.getElementById('loc-modal').classList.remove('active'); }; window.saveLocationModal = () => { /* logic */ }; window.autofillLocation = () => { /* logic */ }; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats; window.applyAppearance = applyAppearance; window.toggleCustomRes = toggleCustomRes; window.toggleAccordion = toggleAccordion;
+function confirmImport() {
+    let raw = document.getElementById('import-text').value; if (!raw) return closeImport();
+    try {
+        const startBrace = raw.indexOf('{'); const startBracket = raw.indexOf('[');
+        let start = (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) ? startBrace : startBracket;
+        const endBrace = raw.lastIndexOf('}'); const endBracket = raw.lastIndexOf(']');
+        let end = (endBrace > endBracket) ? endBrace : endBracket;
+        if (start === -1 || end === -1) throw new Error("Could not find JSON structure.");
+        let jsonStr = raw.substring(start, end + 1);
+        let cleaned = jsonStr.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "'").replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'").replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/,\s*([\]}])/g, '$1').replace(/\r?\n|\r/g, ' ');
+        const parsed = JSON.parse(cleaned);
+        if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
+        else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
+        else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
+        else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
+        else if (state.importType === 'full') { Object.assign(state.settings, parsed); setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); applyAppearance(); }
+        else if (state.importType === 'prompts') { state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; loadEditorPrompt(); }
+        localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); 
+        alert("Import successful!"); closeImport();
+    } catch(e) { console.error("Parse Error Detail:", e); alert("Import failed: " + e.message); }
+}
+
+async function savePOIModal() {
+    const city = document.getElementById('modal-poi-city').value; const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value;
+    if (!city || !name) return alert("City and Name required");
+    if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; state.settings.poiCache[city].push({name, description: desc});
+    renderPOISelectors(); localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); closePOIModal();
+}
+async function sanitizePOIModal() {
+    const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value; const city = document.getElementById('modal-poi-city').value; if (!name) return alert("Enter a name first");
+    const btn = document.getElementById('btn-modal-sanitize'); btn.disabled = true; btn.innerText = "Sanitizing...";
+    try { const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); document.getElementById('modal-poi-name').value = data.name; document.getElementById('modal-poi-desc').value = data.description; } finally { btn.disabled = false; btn.innerText = "✨ AI Sanitize"; }
+}
+function saveLocationModal() {
+    const city = document.getElementById('modal-loc-city').value; const lat = parseFloat(document.getElementById('modal-loc-lat').value); const lon = parseFloat(document.getElementById('modal-loc-lon').value);
+    if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon required");
+    state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
+    renderLocations(); localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); closeLocationModal();
+}
+async function autofillLocation() {
+    const city = document.getElementById('modal-loc-city').value; const stateVal = document.getElementById('modal-loc-state').value; if (!city) return alert("Enter city");
+    const btn = document.getElementById('btn-loc-autofill'); btn.disabled = true; btn.innerText = "...";
+    try { const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); const data = await res.json(); if (data && data.length > 0) { const top = data[0]; document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); } } catch(e) { alert("Error"); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
+}
+
+window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = (t) => { state.settings[t] = []; location.reload(); }; window.openPOIModal = () => { document.getElementById('poi-modal').classList.add('active'); }; window.closePOIModal = () => { document.getElementById('poi-modal').classList.remove('active'); }; window.savePOIModal = savePOIModal; window.sanitizePOIModal = sanitizePOIModal; window.deletePOI = deletePOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = () => { document.getElementById('loc-modal').classList.add('active'); }; window.closeLocationModal = () => { document.getElementById('loc-modal').classList.remove('active'); }; window.saveLocationModal = saveLocationModal; window.autofillLocation = autofillLocation; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats; window.applyAppearance = applyAppearance; window.toggleCustomRes = toggleCustomRes; window.toggleAccordion = toggleAccordion;
