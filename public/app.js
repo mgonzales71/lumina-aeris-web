@@ -1,5 +1,6 @@
-// Lumina Aeris Web & Worker - App Logic v1.16.3
+// Lumina Aeris Web & Worker - App Logic v1.16.4
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
+// Self-Healing Import & Solar-Aware Transporter Restoration.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
@@ -33,12 +34,16 @@ let animId = null;
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.16.3');
+    const saved = localStorage.getItem('lumina_v1.16.4');
     if (saved) {
         try { Object.assign(state.settings, JSON.parse(saved)); } catch(e) {}
     } else {
-        const old = localStorage.getItem('lumina_v1.15.3');
-        if (old) { try { Object.assign(state.settings, JSON.parse(old)); save(); } catch(e) {} }
+        const v3 = localStorage.getItem('lumina_v1.16.3');
+        if (v3) { try { Object.assign(state.settings, JSON.parse(v3)); save(); } catch(e) {} }
+        else {
+            const v2 = localStorage.getItem('lumina_v1.15.3');
+            if (v2) { try { Object.assign(state.settings, JSON.parse(v2)); save(); } catch(e) {} }
+        }
     }
     
     applyAppearance();
@@ -82,14 +87,14 @@ async function switchRemoteProfile(name) {
                 state.settings = remote;
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); applyAppearance();
-                localStorage.setItem('lumina_v1.16.3', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) {}
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.16.3', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -208,7 +213,7 @@ function saveEditorPrompt() {
     else if (mode === 'night') state.settings.promptNight = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
-    localStorage.setItem('lumina_v1.16.3', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
 }
 
 async function syncSettings() {
@@ -231,7 +236,7 @@ async function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
-    localStorage.setItem('lumina_v1.16.3', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
 }
 
 function toggleCustomRes() {
@@ -241,44 +246,118 @@ function toggleCustomRes() {
 }
 
 async function handleGenerate() {
-    if (state.isGenerating) return; state.isGenerating = true; 
-    const btn = document.getElementById('btn-gen-ui'); btn.disabled = true; btn.innerText = "Locating..."; 
-    startTransporterEffect();
+    if (state.isGenerating) return;
+    state.isGenerating = true;
+    const btn = document.getElementById('btn-gen-ui');
+    btn.disabled = true;
+    btn.innerText = "Initializing...";
+
     try {
-        const envRes = await fetch("/api/proxy/weather?lat=" + state.lat + "&lon=" + state.lon);
-        const env = await envRes.json(); const cityKey = state.city.toLowerCase().trim();
-        if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) { btn.innerText = "Discovering..."; await discoverPOIs(null); }
-        let pois = state.settings.poiCache[cityKey]; if (!pois || !Array.isArray(pois) || pois.length === 0) pois = [{name: state.city, description: "A beautiful view"}];
-        const poi = pois[Math.floor(Math.random() * pois.length)] || {name: state.city, description: "A beautiful view"};
-        const theme = getThemeForDate(); btn.innerText = "Dreaming..."; 
-        const rawP = buildPrompt(env, poi, theme); 
+        // 1. Get Environmental Data
+        const envRes = await fetch(`/api/proxy/weather?lat=${state.lat}&lon=${state.lon}`);
+        const env = await envRes.json();
+        
+        // 2. Start Solar-Aware Transporter
+        startTransporterEffect(env);
+        btn.innerText = "Transporting...";
+
+        // 3. POI Selection
+        const cityKey = state.city.toLowerCase().trim();
+        if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) {
+            btn.innerText = "Discovering...";
+            await discoverPOIs(null);
+        }
+        
+        let pois = state.settings.poiCache[cityKey];
+        if (!pois || !Array.isArray(pois) || pois.length === 0) {
+            pois = [{name: state.city, description: "A beautiful view"}];
+        }
+        const poi = pois[Math.floor(Math.random() * pois.length)] || pois[0];
+        
+        // 4. Build Prompt
+        const theme = getThemeForDate();
+        const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
+        
+        // Debugging
         document.getElementById('debug-prompt').innerText = cleanP;
-        const debugVars = { "City": state.city, "Weather": env.weather_desc, "Theme": theme, "POI": poi.name, "Time": env.is_day ? "Day" : "Night", "Style": state.settings.style };
-        document.getElementById('debug-vars').innerHTML = Object.entries(debugVars).map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
+        const debugVars = {
+            "City": state.city,
+            "Weather": env.weather_desc,
+            "Theme": theme,
+            "POI": poi.name,
+            "Time": env.is_day ? "Day" : "Night",
+            "Solar": `Rise: ${env.sunrise}, Set: ${env.sunset}`
+        };
+        document.getElementById('debug-vars').innerHTML = Object.entries(debugVars)
+            .map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
+
+        // 5. Pollinations Request
         let w, h;
-        if (state.settings.resolution === 'custom') { w = state.settings.customResW; h = state.settings.customResH; }
-        else { [w, h] = state.settings.resolution.split('x'); }
-        const seed = (state.settings.seedEnable && state.settings.seed !== -1) ? state.settings.seed : Math.floor(Math.random()*2147483647);
+        if (state.settings.resolution === 'custom') {
+            w = state.settings.customResW; h = state.settings.customResH;
+        } else {
+            [w, h] = state.settings.resolution.split('x');
+        }
+        
+        const seed = (state.settings.seedEnable && state.settings.seed !== -1) ? state.settings.seed : Math.floor(Math.random() * 2147483647);
         let url = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanP)}?width=${w}&height=${h}&seed=${seed}&model=${state.settings.model}&nologo=true`;
+        
         if (state.settings.apiKey) url += "&key=" + state.settings.apiKey;
         if (state.settings.transparent) url += "&transparent=true";
         if (state.settings.safe === false) url += "&safe=false";
         if (state.settings.enhance) url += "&enhance=true";
         if (state.settings.quality) url += "&quality=" + state.settings.quality;
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
-        const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = url;
+
+        // 6. Finalize UI
+        const img = document.getElementById('result-image');
+        img.classList.remove('loaded');
+        img.src = url;
+        
         img.onload = () => {
-            img.classList.add('loaded'); stopTransporterEffect(); document.getElementById('placeholder').style.display = 'none';
+            img.classList.add('loaded');
+            stopTransporterEffect();
+            document.getElementById('placeholder').style.display = 'none';
+            
             const activeTemplate = env.is_day ? state.settings.promptDay : state.settings.promptNight;
             const hasPOI = activeTemplate.includes("{poi_name}");
+            
             if (hasPOI) {
-                if (state.settings.overlayLabel) { document.getElementById('poi-label').innerText = poi.name; document.getElementById('poi-label').style.display = 'block'; document.getElementById('info-overlay').style.display = 'none'; }
-                else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'block'; document.getElementById('theme-tag').innerText = theme.toUpperCase(); document.getElementById('poi-name').innerText = poi.name; document.getElementById('poi-desc').innerText = poi.description || ""; }
-            } else { document.getElementById('poi-label').style.display = 'none'; document.getElementById('info-overlay').style.display = 'none'; }
-            document.getElementById('btn-save-ui').style.display = 'block'; btn.innerText = "Generate Wallpaper"; btn.disabled = false; state.isGenerating = false;
+                if (state.settings.overlayLabel) {
+                    document.getElementById('poi-label').innerText = poi.name;
+                    document.getElementById('poi-label').style.display = 'block';
+                    document.getElementById('info-overlay').style.display = 'none';
+                } else {
+                    document.getElementById('poi-label').style.display = 'none';
+                    document.getElementById('info-overlay').style.display = 'block';
+                    document.getElementById('theme-tag').innerText = theme.toUpperCase();
+                    document.getElementById('poi-name').innerText = poi.name;
+                    document.getElementById('poi-desc').innerText = poi.description || "";
+                }
+            } else {
+                document.getElementById('poi-label').style.display = 'none';
+                document.getElementById('info-overlay').style.display = 'none';
+            }
+            
+            document.getElementById('btn-save-ui').style.display = 'block';
+            btn.innerText = "Generate Wallpaper";
+            btn.disabled = false;
+            state.isGenerating = false;
         };
-    } catch(e) { alert("Error: " + e.message); btn.disabled = false; btn.innerText = "Generate Wallpaper"; state.isGenerating = false; stopTransporterEffect(); }
+        
+        img.onerror = () => {
+            throw new Error("Failed to load image from generator.");
+        };
+
+    } catch (e) {
+        console.error(e);
+        alert("Generation Error: " + e.message);
+        btn.disabled = false;
+        btn.innerText = "Generate Wallpaper";
+        state.isGenerating = false;
+        stopTransporterEffect();
+    }
 }
 
 function buildPrompt(env, poi, theme) {
@@ -290,22 +369,96 @@ function buildPrompt(env, poi, theme) {
 
 function browserSanitize(input) { return input.toString().replace(/[\n\r]/g, " ").replace(/%/g, " percent").replace(/[&#?\/\\"]/g, "").trim(); }
 
-function startTransporterEffect() {
-    const canvas = document.getElementById('firefly-canvas'); canvas.classList.add('active');
-    const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
-    const particles = Array.from({length: 60}, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 2 + 1, speed: Math.random() * 2 + 0.5, beam: Math.random() > 0.8, beamH: Math.random() * 100 + 50 }));
+function startTransporterEffect(env = null) {
+    const canvas = document.getElementById('firefly-canvas');
+    if (!canvas) return;
+    if (animId) cancelAnimationFrame(animId);
+    
+    canvas.classList.add('active');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+    
+    const isDay = env ? env.is_day : true;
+    const weather = (env && env.weather_desc) ? env.weather_desc.toLowerCase() : "clear";
+    
+    let color = isDay ? "255, 200, 100" : "150, 200, 255";
+    if (weather.includes("rain") || weather.includes("drizzle")) color = "100, 150, 255";
+    if (weather.includes("snow") || weather.includes("ice")) color = "255, 255, 255";
+    if (weather.includes("cloud") || weather.includes("overcast")) color = "200, 200, 220";
+
+    const particles = Array.from({length: 70}, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2 + 1,
+        speed: Math.random() * 2 + 0.5,
+        beam: Math.random() > 0.85,
+        beamH: Math.random() * 80 + 40,
+        drift: (Math.random() - 0.5) * 0.5
+    }));
+
     function loop() {
+        if (!canvas.classList.contains('active')) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => { p.y -= p.speed; if (p.y < -100) p.y = canvas.height + 100; const alpha = 0.3 + Math.sin(Date.now()/200 + p.x) * 0.3; if (p.beam) { ctx.fillStyle = `rgba(255, 200, 100, ${alpha * 0.5})`; ctx.fillRect(p.x, p.y, 1, p.beamH); } ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+        
+        particles.forEach(p => {
+            if (weather.includes("rain")) {
+                p.y += p.speed * 5;
+                p.x += p.drift;
+                if (p.y > canvas.height) p.y = -20;
+            } else if (weather.includes("snow")) {
+                p.y += p.speed * 1.5;
+                p.x += Math.sin(Date.now() / 1000 + p.y) * 1;
+                if (p.y > canvas.height) p.y = -20;
+            } else {
+                p.y -= p.speed;
+                if (p.y < -100) p.y = canvas.height + 100;
+            }
+
+            if (p.x < -50) p.x = canvas.width + 50;
+            if (p.x > canvas.width + 50) p.x = -50;
+
+            const alpha = 0.4 + Math.sin(Date.now() / 300 + p.x) * 0.2;
+            
+            if (p.beam && !weather.includes("snow")) {
+                ctx.fillStyle = `rgba(${color}, ${alpha * 0.4})`;
+                ctx.fillRect(p.x, p.y, weather.includes("rain") ? 2 : 1, p.beamH);
+            }
+            
+            ctx.fillStyle = `rgba(${color}, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
         animId = requestAnimationFrame(loop);
     }
     loop();
 }
-function stopTransporterEffect() { cancelAnimationFrame(animId); document.getElementById('firefly-canvas').classList.remove('active'); }
+
+function stopTransporterEffect() { 
+    if (animId) cancelAnimationFrame(animId); 
+    const canvas = document.getElementById('firefly-canvas');
+    if (canvas) canvas.classList.remove('active'); 
+}
+
 function toggleAccordion(id) { const el = document.getElementById(id); const chev = document.getElementById('debug-chevron'); const isOpen = el.style.display === 'block'; el.style.display = isOpen ? 'none' : 'block'; if(chev) chev.innerText = isOpen ? '▼' : '▲'; }
 
-function switchTab(tab, btn) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(tab + '-view').classList.add('active'); if (btn) btn.classList.add('active'); }
-function switchSubTab(tab) { document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none'); const target = document.getElementById(tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab); if (target) target.style.display = 'block'; document.querySelectorAll('.tabs-sub button').forEach(b => b.classList.remove('active')); const activeBtn = document.getElementById('tab-' + tab); if (activeBtn) activeBtn.classList.add('active'); }
+function switchTab(tab, btn) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tab + '-view').classList.add('active');
+    if (btn) btn.classList.add('active');
+}
+
+function switchSubTab(tab) {
+    document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none');
+    const target = document.getElementById(tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab);
+    if (target) target.style.display = 'block';
+    document.querySelectorAll('.tabs-sub button').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.getElementById('tab-' + tab);
+    if (activeBtn) activeBtn.classList.add('active');
+}
+
 function requestLocation() { if (!navigator.geolocation || state.settings.locMode === 'custom') return; navigator.geolocation.getCurrentPosition(pos => { state.lat = pos.coords.latitude; state.lon = pos.coords.longitude; document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2); fetch("/api/proxy/nominatim?lat=" + state.lat + "&lon=" + state.lon).then(r => r.json()).then(data => { state.city = data.address.city || data.address.town || data.address.village || "Unknown"; state.state = data.address.state || ""; state.country = data.address.country || ""; renderPOISelectors(); }); }); }
 function getThemeForDate() { const now = new Date(); const ord = (now.getMonth() + 1) * 100 + now.getDate(); const match = state.settings.themes.find(t => ord >= t.Begin && ord <= t.End); return match ? match.Theme : "General"; }
 function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); location.reload(); } }
@@ -381,25 +534,66 @@ function openImport(type) { state.importType = type; document.getElementById('im
 function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
 
 function confirmImport() {
-    let raw = document.getElementById('import-text').value; if (!raw) return closeImport();
+    let raw = document.getElementById('import-text').value;
+    if (!raw) return closeImport();
+    
     try {
-        const startBrace = raw.indexOf('{'); const startBracket = raw.indexOf('[');
-        let start = (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) ? startBrace : startBracket;
-        const endBrace = raw.lastIndexOf('}'); const endBracket = raw.lastIndexOf(']');
-        let end = (endBrace > endBracket) ? endBrace : endBracket;
-        if (start === -1 || end === -1) throw new Error("No valid JSON found.");
+        // Advanced Self-Healing: Locate JSON boundaries
+        const startBrace = raw.indexOf('{');
+        const startBracket = raw.indexOf('[');
+        let start = -1;
+        if (startBrace !== -1 && startBracket !== -1) start = Math.min(startBrace, startBracket);
+        else if (startBrace !== -1) start = startBrace;
+        else if (startBracket !== -1) start = startBracket;
+
+        const endBrace = raw.lastIndexOf('}');
+        const endBracket = raw.lastIndexOf(']');
+        let end = Math.max(endBrace, endBracket);
+
+        if (start === -1 || end === -1) throw new Error("No JSON structure detected in input.");
+
         let jsonStr = raw.substring(start, end + 1);
-        let cleaned = jsonStr.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "'").replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'").replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/,\s*([\]}])/g, '$1').replace(/\r?\n|\r/g, ' ');
+
+        // Sanitize: fix quotes, handle trailing commas, remove comments
+        let cleaned = jsonStr
+            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // smart quotes
+            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // smart single quotes
+            .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width chars
+            .replace(/,\s*([\]}])/g, '$1') // trailing commas
+            .replace(/\/\/.*$/gm, "") // line comments
+            .replace(/\/\*[\s\S]*?\*\//g, "") // block comments
+            .trim();
+
         const parsed = JSON.parse(cleaned);
-        if (state.importType === 'themes') { state.settings.themes = parsed; renderThemes(); }
-        else if (state.importType === 'pois') { state.settings.poiCache = parsed; renderPOISelectors(); }
-        else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
-        else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
-        else if (state.importType === 'full') { Object.assign(state.settings, parsed); setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); applyAppearance(); }
-        else if (state.importType === 'prompts') { state.settings.promptDay = parsed.day || DEFAULT_DAY_STR; state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR; loadEditorPrompt(); }
-        localStorage.setItem('lumina_v1.16.3', JSON.stringify(state.settings)); 
-        alert("Import successful!"); closeImport();
-    } catch(e) { console.error("Parse Error Detail:", e); alert("Import failed: " + e.message); }
+        
+        if (state.importType === 'themes') {
+            state.settings.themes = Array.isArray(parsed) ? parsed : state.settings.themes;
+            renderThemes();
+        } else if (state.importType === 'pois') {
+            state.settings.poiCache = (typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : state.settings.poiCache;
+            renderPOISelectors();
+        } else if (state.importType === 'styles') {
+            state.settings.styles = Array.isArray(parsed) ? parsed : state.settings.styles;
+            renderStyles();
+        } else if (state.importType === 'locations') {
+            state.settings.locations = Array.isArray(parsed) ? parsed : state.settings.locations;
+            renderLocations();
+        } else if (state.importType === 'full') {
+            Object.assign(state.settings, parsed);
+            setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); applyAppearance();
+        } else if (state.importType === 'prompts') {
+            state.settings.promptDay = parsed.day || DEFAULT_DAY_STR;
+            state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR;
+            loadEditorPrompt();
+        }
+        
+        save();
+        alert("Import successful! Data has been healed and integrated.");
+        closeImport();
+    } catch(e) {
+        console.error("Heal Error:", e);
+        alert("Import failed even after healing: " + e.message);
+    }
 }
 
 function openPOIModal() { document.getElementById('modal-poi-city').value = state.city; document.getElementById('modal-poi-name').value = ""; document.getElementById('modal-poi-desc').value = ""; document.getElementById('poi-modal').classList.add('active'); }
@@ -457,4 +651,51 @@ function toggleCustomLoc() {
     else requestLocation();
 }
 
-window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = (t) => { state.settings[t] = []; location.reload(); }; window.openPOIModal = openPOIModal; window.closePOIModal = closePOIModal; window.savePOIModal = savePOIModal; window.sanitizePOIModal = sanitizePOIModal; window.deletePOI = deletePOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = openLocationModal; window.closeLocationModal = closeLocationModal; window.saveLocationModal = saveLocationModal; window.autofillLocation = autofillLocation; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats; window.applyAppearance = applyAppearance; window.toggleCustomRes = toggleCustomRes; window.toggleAccordion = toggleAccordion;
+// --- 3. EXPORTS ---
+window.switchTab = switchTab;
+window.switchSubTab = switchSubTab;
+window.handleGenerate = handleGenerate;
+window.openFullRes = openFullRes;
+window.resetApp = resetApp;
+window.resetPrompts = resetPrompts;
+window.syncSettings = syncSettings;
+window.loadEditorPrompt = loadEditorPrompt;
+window.saveEditorPrompt = saveEditorPrompt;
+window.openImport = openImport;
+window.confirmImport = confirmImport;
+window.closeImport = closeImport;
+window.exportData = exportData;
+window.clearCategory = (t) => { state.settings[t] = []; location.reload(); };
+window.openPOIModal = openPOIModal;
+window.closePOIModal = closePOIModal;
+window.savePOIModal = savePOIModal;
+window.sanitizePOIModal = sanitizePOIModal;
+window.deletePOI = deletePOI;
+window.discoverPOIs = discoverPOIs;
+window.deleteCity = deleteCity;
+window.openLocationModal = openLocationModal;
+window.closeLocationModal = closeLocationModal;
+window.saveLocationModal = saveLocationModal;
+window.autofillLocation = autofillLocation;
+window.deleteLocation = deleteLocation;
+window.applySavedLoc = applySavedLoc;
+window.toggleCustomLoc = toggleCustomLoc;
+window.addStylePrompt = addStylePrompt;
+window.deleteStyle = deleteStyle;
+window.addThemePrompt = addThemePrompt;
+window.deleteTheme = deleteTheme;
+window.saveProfile = saveProfile;
+window.loadProfile = loadProfile;
+window.deleteProfile = deleteProfile;
+window.createRemoteProfile = createRemoteProfile;
+window.switchRemoteProfile = switchRemoteProfile;
+window.deleteRemoteProfile = deleteRemoteProfile;
+window.purgeCloudData = purgeCloudData;
+window.refreshRemoteProfiles = refreshRemoteProfiles;
+window.manualCloudSync = manualCloudSync;
+window.fetchUsageStats = fetchUsageStats;
+window.applyAppearance = applyAppearance;
+window.toggleCustomRes = toggleCustomRes;
+window.toggleAccordion = toggleAccordion;
+window.startTransporterEffect = startTransporterEffect;
+window.stopTransporterEffect = stopTransporterEffect;
