@@ -242,19 +242,14 @@ async function handleGenerate() {
         let pois = state.settings.poiCache[cityKey]; if (!pois || !Array.isArray(pois) || pois.length === 0) pois = [{name: state.city, description: "A beautiful view"}];
         const poi = pois[Math.floor(Math.random() * pois.length)] || {name: state.city, description: "A beautiful view"};
         const theme = getThemeForDate(); btn.innerText = "Dreaming..."; 
-        
         const rawP = buildPrompt(env, poi, theme); 
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
-        
-        // Debugger Logic
         document.getElementById('debug-prompt').innerText = cleanP;
         const debugVars = { "City": state.city, "Weather": env.weather_desc, "Theme": theme, "POI": poi.name, "Time": env.is_day ? "Day" : "Night", "Style": state.settings.style };
         document.getElementById('debug-vars').innerHTML = Object.entries(debugVars).map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
-
         let w, h;
         if (state.settings.resolution === 'custom') { w = state.settings.customResW; h = state.settings.customResH; }
         else { [w, h] = state.settings.resolution.split('x'); }
-        
         const seed = (state.settings.seedEnable && state.settings.seed !== -1) ? state.settings.seed : Math.floor(Math.random()*2147483647);
         let url = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanP)}?width=${w}&height=${h}&seed=${seed}&model=${state.settings.model}&nologo=true`;
         if (state.settings.apiKey) url += "&key=" + state.settings.apiKey;
@@ -263,11 +258,9 @@ async function handleGenerate() {
         if (state.settings.enhance) url += "&enhance=true";
         if (state.settings.quality) url += "&quality=" + state.settings.quality;
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
-        
         const img = document.getElementById('result-image'); img.classList.remove('loaded'); img.src = url;
         img.onload = () => {
-            img.classList.add('loaded'); stopTransporterEffect(); 
-            document.getElementById('placeholder').style.display = 'none';
+            img.classList.add('loaded'); stopTransporterEffect(); document.getElementById('placeholder').style.display = 'none';
             const activeTemplate = env.is_day ? state.settings.promptDay : state.settings.promptNight;
             const hasPOI = activeTemplate.includes("{poi_name}");
             if (hasPOI) {
@@ -321,11 +314,12 @@ function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles
 
 function renderLocations() { const list = document.getElementById('location-list'); if(!list) return; list.innerHTML = ""; state.settings.locations.forEach((loc, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); renderPOISelectors(); }
 function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); }
-function renderPOISelectors() { const sel = document.getElementById('poi-city-select'); if(!sel) return; sel.innerHTML = ""; const cities = Object.keys(state.settings.poiCache).sort(); cities.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.innerText = c.toUpperCase(); sel.appendChild(opt); }); renderPOIs(); }
-function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description}</div></div><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
+function renderPOISelectors() { const sel = document.getElementById('poi-city-select'); if(!sel) return; sel.innerHTML = ""; const cachedCities = Object.keys(state.settings.poiCache); const savedCities = state.settings.locations.map(l => l.city.toLowerCase()); const allCities = [...new Set([...cachedCities, ...savedCities])].sort(); allCities.forEach(city => { const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt); }); renderPOIs(); }
+function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div><div><button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
 function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); }
-function deleteCity() { const city = document.getElementById('poi-city-select').value; if (city) { delete state.settings.poiCache[city]; renderPOISelectors(); } }
-async function discoverPOIs(btn) { const city = state.city; const payload = { prompt: state.settings.promptPOIDomestic.split('{city}').join(city), model: state.settings.textModel }; const res = await fetch("/api/proxy/poi", { method: 'POST', body: JSON.stringify(payload) }); const data = await res.json(); state.settings.poiCache[city.toLowerCase()] = data; renderPOISelectors(); }
+function deleteCity() { const city = document.getElementById('poi-city-select').value; if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return; delete state.settings.poiCache[city]; renderPOISelectors(); }
+async function discoverPOIs(btn) { const city = state.city; const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states"); let rawPrompt = isUS ? state.settings.promptPOIDomestic : state.settings.promptPOIIntl; rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country); if(btn) { btn.disabled = true; btn.innerText = "Finding..."; } try { const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey }; const res = await fetch("/api/proxy/poi", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await res.json(); const cityKey = city.toLowerCase().trim(); if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = []; if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data]; else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description}); renderPOISelectors(); } catch(e) { console.error("Discovery error:", e); } finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } } }
+async function consultPOI(city, i) { const p = state.settings.poiCache[city][i]; const btn = event ? event.currentTarget : null; if(btn) { btn.disabled = true; btn.innerText = "..."; } try { const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); p.description = data.description; renderPOIs(); } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } } }
 function renderThemes() { const list = document.getElementById('theme-list'); if(!list) return; list.innerHTML = ""; state.settings.themes.forEach((t, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
 function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); } }
 function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); }
@@ -335,17 +329,18 @@ function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); }
 
 async function fetchUsageStats() {
     const key = state.settings.apiKey; const container = document.getElementById('usage-stats');
-    if (!key) { container.innerHTML = "Enter API key."; return; }
+    if (!key) { container.innerHTML = "No API key found."; return; }
+    container.innerHTML = "Fetching...";
     try {
         const pRes = await fetch(`/api/proxy/account/profile?key=${encodeURIComponent(key)}`); const pData = await pRes.json();
         const bRes = await fetch(`/api/proxy/account/balance?key=${encodeURIComponent(key)}`); const bData = await bRes.json();
         const balance = bData.balance ?? bData.totalBalance ?? pData.balance ?? "N/A";
-        container.innerHTML = `Balance: ${Number(balance).toFixed(2)} Pollen | Tier: ${pData.tier || "Standard"}`;
-    } catch(e) { container.innerHTML = "Error."; }
+        container.innerHTML = `<div>Balance: <span style="color:#fff; font-weight:bold;">${Number(balance).toFixed(2)} Pollen</span></div><div style="margin-top:4px;">Tier: <span style="color:#fff; font-weight:bold;">${pData.tier || "Standard"}</span></div>`;
+    } catch(e) { container.innerHTML = "Error fetching stats."; }
 }
 
 function exportData(type) { 
-    let data = type === 'full' ? state.settings : (type === 'pois' ? state.settings.poiCache : state.settings[type]);
+    let data; if (type === 'pois') data = state.settings.poiCache; else if (type === 'themes') data = state.settings.themes; else if (type === 'styles') data = state.settings.styles; else if (type === 'locations') data = state.settings.locations; else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight }; else data = state.settings;
     document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
@@ -358,7 +353,7 @@ function confirmImport() {
         let start = (startBrace !== -1 && (startBracket === -1 || startBrace < startBracket)) ? startBrace : startBracket;
         const endBrace = raw.lastIndexOf('}'); const endBracket = raw.lastIndexOf(']');
         let end = (endBrace > endBracket) ? endBrace : endBracket;
-        if (start === -1 || end === -1) throw new Error("Could not find JSON structure.");
+        if (start === -1 || end === -1) throw new Error("No valid JSON found.");
         let jsonStr = raw.substring(start, end + 1);
         let cleaned = jsonStr.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "'").replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'").replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/,\s*([\]}])/g, '$1').replace(/\r?\n|\r/g, ' ');
         const parsed = JSON.parse(cleaned);
@@ -375,20 +370,20 @@ function confirmImport() {
 
 async function savePOIModal() {
     const city = document.getElementById('modal-poi-city').value; const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value;
-    if (!city || !name) return alert("City and Name required");
+    if (!city || !name) return alert("City/Name required");
     if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; state.settings.poiCache[city].push({name, description: desc});
-    renderPOISelectors(); localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); closePOIModal();
+    renderPOISelectors(); closePOIModal();
 }
 async function sanitizePOIModal() {
-    const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value; const city = document.getElementById('modal-poi-city').value; if (!name) return alert("Enter a name first");
-    const btn = document.getElementById('btn-modal-sanitize'); btn.disabled = true; btn.innerText = "Sanitizing...";
+    const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value; const city = document.getElementById('modal-poi-city').value; if (!name) return alert("Name first");
+    const btn = document.getElementById('btn-modal-sanitize'); btn.disabled = true; btn.innerText = "...";
     try { const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); document.getElementById('modal-poi-name').value = data.name; document.getElementById('modal-poi-desc').value = data.description; } finally { btn.disabled = false; btn.innerText = "✨ AI Sanitize"; }
 }
 function saveLocationModal() {
     const city = document.getElementById('modal-loc-city').value; const lat = parseFloat(document.getElementById('modal-loc-lat').value); const lon = parseFloat(document.getElementById('modal-loc-lon').value);
-    if (!city || isNaN(lat) || isNaN(lon)) return alert("City, Lat, and Lon required");
+    if (!city || isNaN(lat) || isNaN(lon)) return alert("Invalid Location");
     state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
-    renderLocations(); localStorage.setItem('lumina_v1.16.0', JSON.stringify(state.settings)); closeLocationModal();
+    renderLocations(); closeLocationModal();
 }
 async function autofillLocation() {
     const city = document.getElementById('modal-loc-city').value; const stateVal = document.getElementById('modal-loc-state').value; if (!city) return alert("Enter city");
