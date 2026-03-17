@@ -490,8 +490,11 @@ async function fetchUsageStats() {
         
         if (pData.error || bData.error) throw new Error(pData.error || bData.error);
         
-        const balance = bData.totalBalance !== undefined ? `${bData.totalBalance} Pollen` : (pData.balance !== undefined ? `${pData.balance} Pollen` : "N/A");
+        // Support multiple key variations and format high-precision floats
+        const rawBalance = bData.balance ?? bData.totalBalance ?? pData.balance ?? pData.totalBalance;
+        const balance = rawBalance !== undefined ? `${Number(rawBalance).toFixed(2)} Pollen` : "N/A";
         const tier = pData.tier || "Standard";
+        const tierGrant = bData.tierBalance ?? bData.tierGrant ?? 0;
         
         container.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -501,7 +504,7 @@ async function fetchUsageStats() {
                 <span>Account Tier:</span><span style="color: #fff; font-weight: bold;">${tier}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-                <span>Tier Grant:</span><span style="color: #aaa; font-size: 11px;">${bData.tierBalance || 0} Pollen</span>
+                <span>Tier Grant:</span><span style="color: #aaa; font-size: 11px;">${Number(tierGrant).toFixed(2)} Pollen</span>
             </div>`;
     } catch(e) { container.innerHTML = `Error: ${e.message}. Verify your API key.`; console.error(e); }
 }
