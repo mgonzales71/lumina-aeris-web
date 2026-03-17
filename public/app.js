@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - App Logic v1.16.4
+// Lumina Aeris Web & Worker - App Logic v1.16.2
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 // Self-Healing Import & Solar-Aware Transporter Restoration.
 
@@ -34,7 +34,7 @@ let animId = null;
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.16.4');
+    const saved = localStorage.getItem('lumina_v1.16.2');
     if (saved) {
         try { Object.assign(state.settings, JSON.parse(saved)); } catch(e) {}
     } else {
@@ -87,14 +87,14 @@ async function switchRemoteProfile(name) {
                 state.settings = remote;
                 state.currentProfile = name;
                 setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); applyAppearance();
-                localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
+                localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
             }
         }
     } catch(e) {}
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -213,7 +213,7 @@ function saveEditorPrompt() {
     else if (mode === 'night') state.settings.promptNight = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
-    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
 }
 
 async function syncSettings() {
@@ -236,7 +236,7 @@ async function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
-    localStorage.setItem('lumina_v1.16.4', JSON.stringify(state.settings)); 
+    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
 }
 
 function toggleCustomRes() {

@@ -51,13 +51,14 @@ body {
     border: 1px solid var(--glass-border);
     border-radius: 28px;
 }
+
 header {
     position: sticky;
     top: 0;
     z-index: 1000;
     height: calc(70px + var(--safe-area-top));
     padding: var(--safe-area-top) 0 0 0;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     border-bottom: 1px solid var(--glass-border);
     background: var(--nav-bg);
     backdrop-filter: blur(20px);
@@ -82,38 +83,44 @@ header {
     100% { background-position: 0% 50%; }
 }
 
-    .preview-card {
-        position: relative;
-        width: 100%;
-        max-height: var(--max-preview-height);
-        margin: 0 auto 30px auto;
-        background: var(--bg-color); /* Darker base for weather effects */
-        overflow: hidden;
-        box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 24px;
-        border: 1px solid var(--glass-border);
-    }
+.container { width: 100%; max-width: 600px; margin: 0 auto; padding: 0 20px 120px 20px; }
 
-    #firefly-canvas {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 2; /* Behind the generated image but visible when image is transparent/loading */
-        pointer-events: none;
-        opacity: 0.6;
-    }
+.view { display: none; }
+.view.active { display: block; animation: fadeIn 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
 
-    #result-image { 
-        position: relative;
-        z-index: 5;
-        width: 100%; height: 100%; 
-        object-fit: contain; 
-        opacity: 0; 
-        transition: opacity 1.2s ease-in; 
-    }
-    #result-image.loaded { opacity: 1; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.preview-card {
+    position: relative;
+    width: 100%;
+    max-height: var(--max-preview-height);
+    margin: 0 auto 30px auto;
+    background: var(--bg-color);
+    overflow: hidden;
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 24px;
+    border: 1px solid var(--glass-border);
+}
+
+.theme-light .preview-card {
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+#result-image { position: relative; z-index: 5; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+#result-image.loaded { opacity: 1; }
+
+#firefly-canvas {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.glass-overlay {
     position: absolute;
     bottom: 25px; left: 20px; right: 20px;
     padding: 18px;
@@ -147,7 +154,7 @@ header {
 .btn-main { background: var(--accent-color); color: #fff; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); }
 .btn-main:active { transform: scale(0.98); opacity: 0.9; }
 .btn-secondary { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--glass-border); }
-.btn-danger { color: #ff3b30; }
+.btn-danger { color: #ff3b30 !important; }
 
 .tab-bar {
     position: fixed; bottom: 0; left: 0; right: 0;
