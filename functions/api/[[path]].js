@@ -347,9 +347,18 @@ export async function onRequest(context) {
             const cleanP = workerSanitize(p) || `Beautiful cinematic wallpaper of ${poi.name}`;
             
             const [w, h] = (config.resolution || "1290x2796").split('x');
-            const seed = Math.floor(Math.random() * 2000000);
+            const seed = (config.seedEnable && config.seed !== undefined) ? config.seed : Math.floor(Math.random() * 2147483647);
+            
             let finalImgUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(cleanP)}?model=${config.model || "gptimage"}&width=${w}&height=${h}&seed=${seed}&nologo=true`;
+            
             if (config.apiKey) finalImgUrl += `&key=${config.apiKey}`;
+            if (config.transparent) finalImgUrl += `&transparent=true`;
+            if (config.safeSearch === false || config.safe === false) finalImgUrl += `&safe=false`;
+            if (config.enhance) finalImgUrl += `&enhance=true`;
+            if (config.quality) finalImgUrl += `&quality=${config.quality}`;
+            if (config.negEnable && config.negativePrompt) {
+                finalImgUrl += `&negative_prompt=${encodeURIComponent(config.negativePrompt)}`;
+            }
             
             return new Response(JSON.stringify({ 
                 imageUrl: finalImgUrl, 
