@@ -1,4 +1,4 @@
-// Lumina Aeris Web Backend - Functions v1.14.0
+// Lumina Aeris Web Backend - Functions v1.15.0
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 const WMO_MAP = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 61: "Rain", 71: "Snow", 95: "Thunderstorm" };
@@ -179,6 +179,29 @@ export async function onRequest(context) {
             
             const res = await fetch(apiUrl, { headers: { "User-Agent": "LuminaAeris/1.0" } });
             return new Response(JSON.stringify(await res.json()), { headers: getCorsHeaders() });
+        }
+
+        // --- 4b. Pollinations Account Proxy ---
+        if (path.startsWith("/api/proxy/account/")) {
+            const key = url.searchParams.get("key");
+            if (!key) return new Response(JSON.stringify({ error: "No API key provided" }), { status: 400, headers: getCorsHeaders() });
+
+            const subPath = path.replace("/api/proxy/account/", ""); // e.g. "profile" or "balance"
+            try {
+                const res = await fetch(`https://gen.pollinations.ai/account/${subPath}`, {
+                    headers: { "Authorization": `Bearer ${key}` }
+                });
+                
+                if (!res.ok) {
+                    const statusText = await res.text();
+                    return new Response(JSON.stringify({ error: `Pollinations API error: ${res.status}`, detail: statusText.substring(0, 100) }), { status: res.status, headers: getCorsHeaders() });
+                }
+
+                const data = await res.json();
+                return new Response(JSON.stringify(data), { headers: getCorsHeaders() });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: "Network error calling Pollinations", detail: e.message }), { status: 500, headers: getCorsHeaders() });
+            }
         }
 
         // --- 5. KV Config Management (Multi-Profile) ---
