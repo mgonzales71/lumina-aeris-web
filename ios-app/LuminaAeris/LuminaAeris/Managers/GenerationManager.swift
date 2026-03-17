@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import Combine
 
 class GenerationManager: ObservableObject {
     static let shared = GenerationManager()

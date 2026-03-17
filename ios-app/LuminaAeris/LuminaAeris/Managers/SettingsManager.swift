@@ -48,7 +48,8 @@ class SettingsManager: ObservableObject {
             negativePrompt: "",
             negEnable: false,
             locMode: "gps",
-            customLocIdx: 0
+            customLocIdx: 0,
+            poiCache: [:]
         )
         
         let initialData = AppData(

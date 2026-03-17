@@ -54,6 +54,9 @@ struct Profile: Codable, Identifiable, Hashable {
     // Location Settings
     var locMode: String // "gps" or "custom"
     var customLocIdx: Int
+    
+    // Landmark Cache (Parity with Web v1.14.6)
+    var poiCache: [String: [POI]]?
 }
 
 struct AppData: Codable {
