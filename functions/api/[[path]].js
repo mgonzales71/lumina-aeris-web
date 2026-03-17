@@ -187,7 +187,8 @@ export async function onRequest(context) {
             if (!key) return new Response(JSON.stringify({ error: "No API key provided" }), { status: 400, headers: getCorsHeaders() });
 
             try {
-                const res = await fetch("https://enter.pollinations.ai/account/profile", {
+                // gen.pollinations.ai is the correct base for account APIs
+                const res = await fetch("https://gen.pollinations.ai/account/profile", {
                     headers: { "Authorization": `Bearer ${key}` }
                 });
                 
