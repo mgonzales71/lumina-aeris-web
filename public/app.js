@@ -165,6 +165,15 @@ function setupUI() {
     document.getElementById('set-seed').value = state.settings.seed;
     document.getElementById('set-neg-enable').checked = state.settings.negEnable;
     document.getElementById('set-neg').value = state.settings.negativePrompt || "";
+    const styleSel = document.getElementById('set-style');
+    if (styleSel) {
+        styleSel.innerHTML = "";
+        state.settings.styles.forEach(s => {
+            const opt = document.createElement('option'); opt.value = s; opt.innerText = s;
+            styleSel.appendChild(opt);
+        });
+        styleSel.value = state.settings.style || "Hyper photo realistic";
+    }
     toggleCustomLoc(); toggleCustomRes(); renderTokens();
 }
 
@@ -293,7 +302,7 @@ function startTransporterEffect() {
     loop();
 }
 function stopTransporterEffect() { cancelAnimationFrame(animId); document.getElementById('firefly-canvas').classList.remove('active'); }
-function toggleAccordion(id) { const el = document.getElementById(id); const chev = document.getElementById('debug-chevron'); const isOpen = el.style.display === 'block'; el.style.display = isOpen ? 'none' : 'block'; chev.innerText = isOpen ? '▼' : '▲'; }
+function toggleAccordion(id) { const el = document.getElementById(id); const chev = document.getElementById('debug-chevron'); const isOpen = el.style.display === 'block'; el.style.display = isOpen ? 'none' : 'block'; if(chev) chev.innerText = isOpen ? '▼' : '▲'; }
 
 function switchTab(tab, btn) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(tab + '-view').classList.add('active'); if (btn) btn.classList.add('active'); }
 function switchSubTab(tab) { document.querySelectorAll('.sub-view').forEach(v => v.style.display = 'none'); const target = document.getElementById(tab === 'prompts' ? 'sub-prompts-data' : 'sub-' + tab); if (target) target.style.display = 'block'; document.querySelectorAll('.tabs-sub button').forEach(b => b.classList.remove('active')); const activeBtn = document.getElementById('tab-' + tab); if (activeBtn) activeBtn.classList.add('active'); }
@@ -312,7 +321,29 @@ function saveProfile() { const name = prompt("Profile Name:"); if (!name) return
 function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); applyAppearance(); alert("Loaded!"); }
 function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); }
 
-function renderLocations() { const list = document.getElementById('location-list'); if(!list) return; list.innerHTML = ""; state.settings.locations.forEach((loc, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); renderPOISelectors(); }
+function renderLocations() {
+    const list = document.getElementById('location-list');
+    if(list) {
+        list.innerHTML = "";
+        state.settings.locations.forEach((loc, i) => {
+            const row = document.createElement('div');
+            row.className = 'list-item';
+            row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`;
+            list.appendChild(row);
+        });
+    }
+    const sel = document.getElementById('set-custom-loc');
+    if(sel) {
+        sel.innerHTML = "";
+        state.settings.locations.forEach((loc, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.innerText = loc.city + (loc.state ? ", " + loc.state : "");
+            sel.appendChild(opt);
+        });
+        sel.value = state.settings.customLocIdx || 0;
+    }
+    renderPOISelectors();
+}
 function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); }
 function renderPOISelectors() { const sel = document.getElementById('poi-city-select'); if(!sel) return; sel.innerHTML = ""; const cachedCities = Object.keys(state.settings.poiCache); const savedCities = state.settings.locations.map(l => l.city.toLowerCase()); const allCities = [...new Set([...cachedCities, ...savedCities])].sort(); allCities.forEach(city => { const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt); }); renderPOIs(); }
 function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div><div><button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
@@ -346,6 +377,9 @@ function exportData(type) {
     document.getElementById('import-modal').classList.add('active');
 }
 
+function openImport(type) { state.importType = type; document.getElementById('import-title').innerText = "Import " + type.toUpperCase(); document.getElementById('import-text').value = ""; document.getElementById('import-modal').classList.add('active'); }
+function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
+
 function confirmImport() {
     let raw = document.getElementById('import-text').value; if (!raw) return closeImport();
     try {
@@ -368,6 +402,9 @@ function confirmImport() {
     } catch(e) { console.error("Parse Error Detail:", e); alert("Import failed: " + e.message); }
 }
 
+function openPOIModal() { document.getElementById('modal-poi-city').value = state.city; document.getElementById('modal-poi-name').value = ""; document.getElementById('modal-poi-desc').value = ""; document.getElementById('poi-modal').classList.add('active'); }
+function closePOIModal() { document.getElementById('poi-modal').classList.remove('active'); }
+
 async function savePOIModal() {
     const city = document.getElementById('modal-poi-city').value; const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value;
     if (!city || !name) return alert("City/Name required");
@@ -379,6 +416,10 @@ async function sanitizePOIModal() {
     const btn = document.getElementById('btn-modal-sanitize'); btn.disabled = true; btn.innerText = "...";
     try { const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); document.getElementById('modal-poi-name').value = data.name; document.getElementById('modal-poi-desc').value = data.description; } finally { btn.disabled = false; btn.innerText = "✨ AI Sanitize"; }
 }
+
+function openLocationModal() { document.getElementById('modal-loc-city').value = ""; document.getElementById('modal-loc-state').value = ""; document.getElementById('modal-loc-country').value = ""; document.getElementById('modal-loc-lat').value = ""; document.getElementById('modal-loc-lon').value = ""; document.getElementById('loc-modal').classList.add('active'); }
+function closeLocationModal() { document.getElementById('loc-modal').classList.remove('active'); }
+
 function saveLocationModal() {
     const city = document.getElementById('modal-loc-city').value; const lat = parseFloat(document.getElementById('modal-loc-lat').value); const lon = parseFloat(document.getElementById('modal-loc-lon').value);
     if (!city || isNaN(lat) || isNaN(lon)) return alert("Invalid Location");
@@ -391,4 +432,29 @@ async function autofillLocation() {
     try { const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); const data = await res.json(); if (data && data.length > 0) { const top = data[0]; document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); } } catch(e) { alert("Error"); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
 }
 
-window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = (t) => { state.settings[t] = []; location.reload(); }; window.openPOIModal = () => { document.getElementById('poi-modal').classList.add('active'); }; window.closePOIModal = () => { document.getElementById('poi-modal').classList.remove('active'); }; window.savePOIModal = savePOIModal; window.sanitizePOIModal = sanitizePOIModal; window.deletePOI = deletePOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = () => { document.getElementById('loc-modal').classList.add('active'); }; window.closeLocationModal = () => { document.getElementById('loc-modal').classList.remove('active'); }; window.saveLocationModal = saveLocationModal; window.autofillLocation = autofillLocation; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats; window.applyAppearance = applyAppearance; window.toggleCustomRes = toggleCustomRes; window.toggleAccordion = toggleAccordion;
+function applySavedLoc(i) {
+    if (i === undefined) {
+        const sel = document.getElementById('set-custom-loc');
+        if (sel) i = parseInt(sel.value);
+    }
+    const loc = state.settings.locations[i];
+    if(!loc) return;
+    state.lat = loc.lat; state.lon = loc.lon;
+    state.city = loc.city; state.state = loc.state || ""; state.country = loc.country || "USA";
+    state.settings.customLocIdx = i;
+    const coordText = document.getElementById('coord-text');
+    if (coordText) coordText.innerText = "Saved: " + state.city;
+    renderPOISelectors();
+}
+
+function toggleCustomLoc() {
+    const modeSel = document.getElementById('set-loc-mode');
+    if (!modeSel) return;
+    const isCustom = modeSel.value === 'custom';
+    const row = document.getElementById('row-custom-list');
+    if (row) row.style.display = isCustom ? 'flex' : 'none';
+    if(isCustom) applySavedLoc(state.settings.customLocIdx || 0);
+    else requestLocation();
+}
+
+window.switchTab = switchTab; window.switchSubTab = switchSubTab; window.handleGenerate = handleGenerate; window.openFullRes = openFullRes; window.resetApp = resetApp; window.resetPrompts = resetPrompts; window.syncSettings = syncSettings; window.loadEditorPrompt = loadEditorPrompt; window.saveEditorPrompt = saveEditorPrompt; window.openImport = openImport; window.confirmImport = confirmImport; window.closeImport = closeImport; window.exportData = exportData; window.clearCategory = (t) => { state.settings[t] = []; location.reload(); }; window.openPOIModal = openPOIModal; window.closePOIModal = closePOIModal; window.savePOIModal = savePOIModal; window.sanitizePOIModal = sanitizePOIModal; window.deletePOI = deletePOI; window.discoverPOIs = discoverPOIs; window.deleteCity = deleteCity; window.openLocationModal = openLocationModal; window.closeLocationModal = closeLocationModal; window.saveLocationModal = saveLocationModal; window.autofillLocation = autofillLocation; window.deleteLocation = deleteLocation; window.applySavedLoc = applySavedLoc; window.toggleCustomLoc = toggleCustomLoc; window.addStylePrompt = addStylePrompt; window.deleteStyle = deleteStyle; window.addThemePrompt = addThemePrompt; window.deleteTheme = deleteTheme; window.saveProfile = saveProfile; window.loadProfile = loadProfile; window.deleteProfile = deleteProfile; window.createRemoteProfile = createRemoteProfile; window.switchRemoteProfile = switchRemoteProfile; window.deleteRemoteProfile = deleteRemoteProfile; window.purgeCloudData = purgeCloudData; window.refreshRemoteProfiles = refreshRemoteProfiles; window.manualCloudSync = manualCloudSync; window.fetchUsageStats = fetchUsageStats; window.applyAppearance = applyAppearance; window.toggleCustomRes = toggleCustomRes; window.toggleAccordion = toggleAccordion;
