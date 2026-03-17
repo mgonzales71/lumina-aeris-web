@@ -40,7 +40,7 @@ class GenerationManager: ObservableObject {
         // 2. Fetch Weather
         DispatchQueue.main.async { self.statusMessage = "WEATHER..." }
         guard let weather = await fetchWeather(lat: lat, lon: lon) else {
-            DispatchQueue.main.async { self.isGenerating = false }
+            DispatchQueue.main.async { self.isGenerating = false; self.statusMessage = "ERROR: WEATHER" }
             return nil
         }
         
@@ -184,7 +184,12 @@ class GenerationManager: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             if let text = String(data: data, encoding: .utf8) {
-                let clean = text.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                // Self-healing parsing logic
+                let clean = text
+                    .replacingOccurrences(of: "```json", with: "")
+                    .replacingOccurrences(of: "```", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
                 if let decoded = try? JSONDecoder().decode([POI].self, from: clean.data(using: .utf8)!) {
                     DispatchQueue.main.async {
                         self.settings.appData.poiCache[cityKey] = decoded
@@ -201,6 +206,7 @@ class GenerationManager: ObservableObject {
             }
         } catch {}
         
+        // Final fallback (v1.14.6 logic)
         return POI(name: city, description: "A majestic local view.")
     }
     
@@ -248,22 +254,31 @@ class GenerationManager: ObservableObject {
         if settings.currentProfile.quality == "high" { p += ", 8k resolution, masterpiece" }
         if settings.currentProfile.quality == "hd" { p += ", 16k resolution, cinematic lighting" }
         
-        return p.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "%", with: " percent").trimmingCharacters(in: .whitespaces)
+        // Final prompt cleanup
+        return p.replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "%", with: " percent")
+                .trimmingCharacters(in: .whitespaces)
     }
     
     private func buildImageURL(prompt: String) -> URL? {
         let dims = settings.currentProfile.resolution.split(separator: "x")
         let w = dims.first ?? "1290"
         let h = dims.last ?? "2796"
-        let seed = settings.currentProfile.seedEnable ? settings.currentProfile.seed : Int.random(in: 1...999999)
+        
+        // Seed support (-1 logic)
+        let seed = (settings.currentProfile.seedEnable && settings.currentProfile.seed != -1) ? settings.currentProfile.seed : Int.random(in: 1...2147483647)
         
         var urlStr = "https://gen.pollinations.ai/image/\(prompt.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? "")?width=\(w)&height=\(h)&seed=\(seed)&model=\(settings.currentProfile.model)&nologo=true"
         
+        // Advanced Parameters Parity (v1.14.8)
         if settings.currentProfile.transparent { urlStr += "&transparent=true" }
         if !settings.currentProfile.safeSearch { urlStr += "&safe=false" }
         if settings.currentProfile.enhance { urlStr += "&enhance=true" }
         if settings.currentProfile.negEnable && !settings.currentProfile.negativePrompt.isEmpty {
             urlStr += "&negative_prompt=\(settings.currentProfile.negativePrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        }
+        if !settings.currentProfile.quality.isEmpty && settings.currentProfile.quality != "medium" {
+            urlStr += "&quality=\(settings.currentProfile.quality)"
         }
         if !settings.currentProfile.apiKey.isEmpty { urlStr += "&key=\(settings.currentProfile.apiKey)" }
         

@@ -8,7 +8,12 @@ class SettingsManager: ObservableObject {
     @Published var appData: AppData
     @Published var currentProfile: Profile
     
-    // Default Strings from Web App v1.14.7
+    // Usage Stats State
+    @Published var pollenBalance: String = "N/A"
+    @Published var accountTier: String = "N/A"
+    @Published var tierGrant: String = "0.00 Pollen"
+    
+    // Default Strings from Web App v1.15.3
     static let DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look."
     
     static let DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look."
@@ -22,7 +27,6 @@ class SettingsManager: ObservableObject {
     private let savePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("lumina_settings_v1.json")
 
     init() {
-        // Initialize with hardcoded defaults first
         let defaultProfile = Profile(
             name: "default",
             promptDay: SettingsManager.DEFAULT_DAY_STR,
@@ -40,7 +44,7 @@ class SettingsManager: ObservableObject {
             safeSearch: true,
             enhance: false,
             seedEnable: false,
-            seed: 0,
+            seed: -1,
             negativePrompt: "",
             negEnable: false,
             locMode: "gps",
@@ -73,7 +77,6 @@ class SettingsManager: ObservableObject {
     }
     
     func save() {
-        // Update the profile in the list before saving
         if let idx = appData.profiles.firstIndex(where: { $0.name == currentProfile.name }) {
             appData.profiles[idx] = currentProfile
         } else {
@@ -87,12 +90,39 @@ class SettingsManager: ObservableObject {
     }
     
     func switchProfile(name: String) {
-        save() // Save current before switching
+        save()
         if let profile = appData.profiles.first(where: { $0.name == name }) {
             self.currentProfile = profile
             appData.currentProfile = name
             save()
+            Task { await fetchUsageStats() } // Refresh stats on switch
         }
+    }
+    
+    func fetchUsageStats() async {
+        guard !currentProfile.apiKey.isEmpty else { return }
+        
+        do {
+            // 1. Fetch Profile
+            var pReq = URLRequest(url: URL(string: "https://gen.pollinations.ai/account/profile")!)
+            pReq.setValue("Bearer \(currentProfile.apiKey)", forHTTPHeaderField: "Authorization")
+            let (pDataRaw, _) = try await URLSession.shared.data(for: pReq)
+            let pData = try? JSONSerialization.jsonObject(with: pDataRaw) as? [String: Any]
+            
+            // 2. Fetch Balance
+            var bReq = URLRequest(url: URL(string: "https://gen.pollinations.ai/account/balance")!)
+            bReq.setValue("Bearer \(currentProfile.apiKey)", forHTTPHeaderField: "Authorization")
+            let (bDataRaw, _) = try await URLSession.shared.data(for: bReq)
+            let bData = try? JSONSerialization.jsonObject(with: bDataRaw) as? [String: Any]
+            
+            DispatchQueue.main.async {
+                let rawBal = bData?["balance"] ?? bData?["totalBalance"] ?? pData?["balance"] ?? 0
+                self.pollenBalance = String(format: "%.2f Pollen", Double("\(rawBal)") ?? 0.0)
+                self.accountTier = pData?["tier"] as? String ?? "Standard"
+                let rawGrant = bData?["tierBalance"] ?? bData?["tierGrant"] ?? 0
+                self.tierGrant = String(format: "%.2f Pollen", Double("\(rawGrant)") ?? 0.0)
+            }
+        } catch {}
     }
     
     func createProfile(name: String) {
