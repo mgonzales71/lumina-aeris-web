@@ -1,12 +1,12 @@
-// Lumina Aeris Web & Worker - App Logic v1.19.1
+// Lumina Aeris Web & Worker - App Logic v1.19.2
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
-const STORAGE_KEY = 'lumina_v1.19.1';
+const STORAGE_KEY = 'lumina_v1.19.2';
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 
-// Expert POI Discovery Prompt (v1.19.1)
+// Expert POI Discovery Prompt (v1.19.2)
 const DEFAULT_POI_DISCOVERY_PROMPT = "You are an expert on points of interest and other unique and notable places of things views or vistas of requested locations. Do not cite sources or any additional information beyond returning one item per line with no formatting. Task: Generate a list of up to 30 visually unique points of interest, landmarks, or vistas in or nearby the city of {city} in the state of {state}. Format Rules: 1. Output ONLY a raw JSON array of objects. 2. Do NOT include markdown code blocks (no backticks). 3. Do NOT include any introductory or concluding text. 4. Each object must have exactly two keys: 'name' and 'description'. 5. 'description' must be 1-2, concise sentences that visually describes the named point of interest.";
 
 const TOKENS_LIST = ["{style}", "{poi_name}", "{poi_desc}", "{city}", "{state_region}", "{country}", "{time_of_day}", "{datetime}", "{weather}", "{temperature}", "{theme}", "{moon_phase}", "{moon_illumination}", "{moonrise}", "{moonset}", "{sunrise}", "{sunset}", "{uv_index}", "{visibility}", "{cloud_cover}", "{wind_speed}"];
@@ -202,7 +202,7 @@ function confirmImport() {
 
         let jsonStr = raw.substring(start, end + 1);
 
-        // --- STABLE HEALING LOGIC (v1.19.1) ---
+        // --- STABLE HEALING LOGIC (v1.19.2) ---
         let cleaned = jsonStr
             .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') 
             .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") 
@@ -338,7 +338,7 @@ async function discoverPOIs(btn) {
     const city = state.city;
     const stateVal = state.state || "requested location";
     
-    // expert prompt v1.19.1
+    // expert prompt v1.19.2
     const promptStr = DEFAULT_POI_DISCOVERY_PROMPT
         .replace("{city}", city)
         .replace("{state}", stateVal);
