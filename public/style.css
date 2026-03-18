@@ -112,7 +112,7 @@ header {
 .preview-card {
     position: relative;
     width: 100%;
-    min-height: 500px; /* Force it to be larger initially */
+    min-height: 600px; /* Force it to be larger initially */
     max-height: var(--max-preview-height);
     aspect-ratio: 1290 / 2796;
     margin: 0 auto 30px auto;
