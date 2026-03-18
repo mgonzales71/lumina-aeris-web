@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - UI Logic v1.19.2
+// Lumina Aeris Web & Worker - UI Logic v1.19.3
 
 function setupUI() {
     loadEditorPrompt();
@@ -43,19 +43,13 @@ function renderTokens() {
     });
 }
 
-function loadEditorPrompt() {
-    const mode = document.getElementById('prompt-mode').value;
-    if (mode === 'day') document.getElementById('prompt-editor').value = state.settings.promptDay;
-    else if (mode === 'night') document.getElementById('prompt-editor').value = state.settings.promptNight;
-    else if (mode === 'poidomestic') document.getElementById('prompt-editor').value = state.settings.promptPOIDomestic;
-    else if (mode === 'poiintl') document.getElementById('prompt-editor').value = state.settings.promptPOIIntl;
-}
-
 function saveEditorPrompt() {
     const mode = document.getElementById('prompt-mode').value;
     const val = document.getElementById('prompt-editor').value;
     if (mode === 'day') state.settings.promptDay = val;
     else if (mode === 'night') state.settings.promptNight = val;
+    else if (mode === 'dayintl') state.settings.promptDayIntl = val;
+    else if (mode === 'nightintl') state.settings.promptNightIntl = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
     isDirty = true; updateSyncUI();

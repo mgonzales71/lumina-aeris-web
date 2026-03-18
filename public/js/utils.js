@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Utils Logic v1.19.2
+// Lumina Aeris Web & Worker - Utility Logic v1.19.3
 
 function updateSyncUI() {
     const btn = document.getElementById('btn-cloud-sync');
@@ -114,9 +114,7 @@ function toggleAccordion(id) {
     if(chev) chev.innerText = isOpen ? '▼' : '▲'; 
 }
 
-function browserSanitize(input) { return input.toString().replace(/[
-]/g, " ").replace(/%/g, " percent").replace(/[&#?\/"]/g, "").trim(); }
-
+function browserSanitize(input) { return input.toString().replace(/[\n\r]/g, " ").replace(/%/g, " percent").replace(/[&#?\/"]/g, "").trim(); }
 function getThemeForDate() {
     const now = new Date(); const ord = (now.getMonth() + 1) * 100 + now.getDate();
     const match = state.settings.themes.find(t => ord >= t.Begin && ord <= t.End);
@@ -124,5 +122,5 @@ function getThemeForDate() {
 }
 
 function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); location.reload(); } }
-function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); isDirty = true; updateSyncUI(); save(); } }
+function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptDayIntl = DEFAULT_DAY_INTL_STR; state.settings.promptNightIntl = DEFAULT_NIGHT_INTL_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DISCOVERY_PROMPT; state.settings.promptPOIIntl = DEFAULT_POI_DISCOVERY_PROMPT; loadEditorPrompt(); isDirty = true; updateSyncUI(); save(); } }
 function openFullRes() { const src = document.getElementById('result-image').src; if (src && !src.includes('placeholder')) window.open(src, '_blank'); }

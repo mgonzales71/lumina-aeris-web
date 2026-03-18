@@ -1,13 +1,15 @@
-// Lumina Aeris Web & Worker - App Logic v1.19.2
+// Lumina Aeris Web & Worker - App Logic v1.19.3
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
-// --- 1. GLOBALS & DEFAULT CONSTANTS ---
-const STORAGE_KEY = 'lumina_v1.19.2';
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 
+// International Default Prompts
+const DEFAULT_DAY_INTL_STR = "Generate a {style} style image of {poi_name} in {city}, {country}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
+const DEFAULT_NIGHT_INTL_STR = "Generate a {style} style image of {poi_name} in {city}, {country}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
+
 // Expert POI Discovery Prompt
-const DEFAULT_POI_DISCOVERY_PROMPT = "You are an expert on points of interest and other unique and notable places of things views or vistas of requested locations. Do not cite sources or any additional information beyond returning one item per line with no formatting. Task: Generate a list of up to 30 visually unique points of interest, landmarks, or vistas in or nearby the city of {city} in the state of {state}. Format Rules: 1. Output ONLY a raw JSON array of objects. 2. Do NOT include markdown code blocks (no backticks). 3. Do NOT include any introductory or concluding text. 4. Each object must have exactly two keys: "name" and "description". 5. "description" must be 1-2, concise sentences that visually describes the named point of interest.";
+const DEFAULT_POI_DISCOVERY_PROMPT = "You are an expert on points of interest and other unique and notable places of things views or vistas of requested locations. Do not cite sources or any additional information beyond returning one item per line with no formatting. Task: Generate a list of up to 30 visually unique points of interest, landmarks, or vistas in or nearby the city of {city} in the state of {state}. Format Rules: 1. Output ONLY a raw JSON array of objects. 2. Do NOT include markdown code blocks (no backticks). 3. Do NOT include any introductory or concluding text. 4. Each object must have exactly two keys: \"name\" and \"description\". 5. \"description\" must be 1-2, concise sentences that visually describes the named point of interest.";
 
 const TOKENS_LIST = ["{style}", "{poi_name}", "{poi_desc}", "{city}", "{state_region}", "{country}", "{time_of_day}", "{datetime}", "{weather}", "{temperature}", "{theme}", "{moon_phase}", "{moon_illumination}", "{moonrise}", "{moonset}", "{sunrise}", "{sunset}", "{uv_index}", "{visibility}", "{cloud_cover}", "{wind_speed}"];
 const DEFAULT_STYLES = ["Hyper photo realistic", "Cinematic photography", "Watercolor painting", "Oil painting", "Pencil sketch", "Crayon drawing", "Claymation", "3D animation render", "Pixar-style 3D illustration", "Flat vector illustration", "Paper craft collage", "Ukiyo-e woodblock print", "Impressionist painting", "Pixel art", "Neon noir", "Vintage film photograph", "Comic book art", "Stained glass illustration"];
@@ -19,6 +21,7 @@ var state = {
     settings: {
         appearance: 'auto',
         promptDay: DEFAULT_DAY_STR, promptNight: DEFAULT_NIGHT_STR,
+        promptDayIntl: DEFAULT_DAY_INTL_STR, promptNightIntl: DEFAULT_NIGHT_INTL_STR, // Added international prompts
         promptPOIDomestic: DEFAULT_POI_DISCOVERY_PROMPT, promptPOIIntl: DEFAULT_POI_DISCOVERY_PROMPT,
         quality: "medium", model: "gptimage", textModel: "gemini-search", style: "Hyper photo realistic", resolution: "1290x2796",
         customResW: 1290, customResH: 2796,
@@ -70,6 +73,45 @@ window.onload = async () => {
     else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx || 0);
 };
 
+function loadEditorPrompt() {
+    const mode = document.getElementById('prompt-mode').value;
+    const editor = document.getElementById('prompt-editor');
+    const tokensContainer = document.getElementById('token-chips');
+    let currentPrompt = '';
+
+    const promptMap = {
+        'day': state.settings.promptDay,
+        'night': state.settings.promptNight,
+        'dayintl': state.settings.promptDayIntl, // Added international daytime
+        'nightintl': state.settings.promptNightIntl, // Added international nighttime
+        'poidomestic': state.settings.promptPOIDomestic,
+        'poiintl': state.settings.promptPOIIntl,
+    };
+
+    currentPrompt = promptMap[mode] || '';
+    editor.value = currentPrompt;
+
+    // Update tokens list based on mode
+    let relevantTokens = [...TOKENS_LIST];
+    if (mode.startsWith('poi')) {
+        relevantTokens = relevantTokens.filter(token => 
+            ['{city}', '{state_region}', '{country}', '{poi_name}', '{poi_desc}', '{style}'].includes(token) || token === '{theme}' // Keep theme as it's general
+        );
+        if (mode === 'poiintl') {
+            relevantTokens = relevantTokens.filter(token => token !== '{state_region}'); // Remove state_region for international POI
+        }
+    }
+    
+    tokensContainer.innerHTML = '';
+    relevantTokens.forEach(token => {
+        const span = document.createElement('span');
+        span.className = 'token-chip';
+        span.textContent = token;
+        span.onclick = () => editor.value += token;
+        tokensContainer.appendChild(span);
+    });
+}
+
 // --- 4. GLOBAL EXPORTS ---
 window.switchTab = switchTab; 
 window.switchSubTab = switchSubTab; 
@@ -91,6 +133,7 @@ window.savePOIModal = savePOIModal;
 window.sanitizePOIModal = sanitizePOIModal; 
 window.deletePOI = deletePOI; 
 window.discoverPOIs = discoverPOIs; 
+window.consultPOI = consultPOI;
 window.deleteCity = deleteCity; 
 window.openLocationModal = openLocationModal; 
 window.closeLocationModal = closeLocationModal; 
