@@ -1,8 +1,9 @@
-// Lumina Aeris Web & Worker - App Logic v1.16.2
+// Lumina Aeris Web & Worker - App Logic v1.16.4
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 // Self-Healing Import & Solar-Aware Transporter Restoration.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
+const STORAGE_KEY = 'lumina_v1.16.4';
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_POI_DOMESTIC_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
@@ -34,19 +35,27 @@ let animId = null;
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    const saved = localStorage.getItem('lumina_v1.16.2');
+    // Load localStorage BEFORE applyAppearance
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
         try { Object.assign(state.settings, JSON.parse(saved)); } catch(e) {}
     } else {
-        const v3 = localStorage.getItem('lumina_v1.16.3');
-        if (v3) { try { Object.assign(state.settings, JSON.parse(v3)); save(); } catch(e) {} }
-        else {
-            const v2 = localStorage.getItem('lumina_v1.15.3');
-            if (v2) { try { Object.assign(state.settings, JSON.parse(v2)); save(); } catch(e) {} }
+        // Migration from previous versions
+        const oldKeys = ['lumina_v1.16.3', 'lumina_v1.16.2', 'lumina_v1.15.3'];
+        for (const key of oldKeys) {
+            const oldData = localStorage.getItem(key);
+            if (oldData) {
+                try { 
+                    Object.assign(state.settings, JSON.parse(oldData)); 
+                    save(); 
+                    break; 
+                } catch(e) {}
+            }
         }
     }
     
-    applyAppearance();
+    // Initial call to applyAppearance must be awaited to prevent flickers
+    await applyAppearance();
 
     if (state.settings.syncSecret) {
         await refreshRemoteProfiles();
@@ -60,10 +69,33 @@ window.onload = async () => {
     else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx || 0);
 };
 
-function applyAppearance() {
+async function applyAppearance() {
     const body = document.body;
-    body.classList.remove('theme-light', 'theme-dark', 'theme-auto');
-    body.classList.add('theme-' + (state.settings.appearance || 'auto'));
+    const mode = state.settings.appearance || 'auto';
+    body.classList.remove('theme-light', 'theme-dark');
+    
+    if (mode === 'light' || mode === 'dark') {
+        body.classList.add('theme-' + mode);
+        return;
+    }
+
+    // Auto mode: Solar Awareness
+    let isDay = true;
+    try {
+        const res = await fetch(`/api/proxy/weather?lat=${state.lat}&lon=${state.lon}`);
+        if (res.ok) {
+            const env = await res.json();
+            isDay = env.is_day;
+        } else {
+            throw new Error("Weather fetch failed");
+        }
+    } catch (e) {
+        // Fallback: Clock-based logic (6AM - 6PM)
+        const hour = new Date().getHours();
+        isDay = (hour >= 6 && hour < 18);
+    }
+    
+    body.classList.add(isDay ? 'theme-light' : 'theme-dark');
 }
 
 async function refreshRemoteProfiles() {
@@ -86,15 +118,15 @@ async function switchRemoteProfile(name) {
             if (remote && remote.promptDay) {
                 state.settings = remote;
                 state.currentProfile = name;
-                setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); applyAppearance();
-                localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
+                setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); await applyAppearance();
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings)); 
             }
         }
     } catch(e) {}
 }
 
 async function save() { 
-    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings)); 
     if (state.settings.syncSecret) {
         try {
             const profile = state.currentProfile || "default";
@@ -213,7 +245,7 @@ function saveEditorPrompt() {
     else if (mode === 'night') state.settings.promptNight = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
-    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
+    save();
 }
 
 async function syncSettings() {
@@ -236,7 +268,8 @@ async function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
-    localStorage.setItem('lumina_v1.16.2', JSON.stringify(state.settings)); 
+    await applyAppearance();
+    save();
 }
 
 function toggleCustomRes() {
@@ -257,7 +290,7 @@ async function handleGenerate() {
         const envRes = await fetch(`/api/proxy/weather?lat=${state.lat}&lon=${state.lon}`);
         const env = await envRes.json();
         
-        // 2. Start Solar-Aware Transporter
+        // 2. Start Transporter (Star Trek Inspired Beam)
         startTransporterEffect(env);
         btn.innerText = "Transporting...";
 
@@ -280,7 +313,7 @@ async function handleGenerate() {
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
         
         // Debugging
-        document.getElementById('debug-prompt').innerText = cleanP;
+        if (document.getElementById('debug-prompt')) document.getElementById('debug-prompt').innerText = cleanP;
         const debugVars = {
             "City": state.city,
             "Weather": env.weather_desc,
@@ -289,8 +322,10 @@ async function handleGenerate() {
             "Time": env.is_day ? "Day" : "Night",
             "Solar": `Rise: ${env.sunrise}, Set: ${env.sunset}`
         };
-        document.getElementById('debug-vars').innerHTML = Object.entries(debugVars)
-            .map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
+        if (document.getElementById('debug-vars')) {
+            document.getElementById('debug-vars').innerHTML = Object.entries(debugVars)
+                .map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
+        }
 
         // 5. Pollinations Request
         let w, h;
@@ -382,19 +417,20 @@ function startTransporterEffect(env = null) {
     const isDay = env ? env.is_day : true;
     const weather = (env && env.weather_desc) ? env.weather_desc.toLowerCase() : "clear";
     
-    let color = isDay ? "255, 200, 100" : "150, 200, 255";
-    if (weather.includes("rain") || weather.includes("drizzle")) color = "100, 150, 255";
-    if (weather.includes("snow") || weather.includes("ice")) color = "255, 255, 255";
-    if (weather.includes("cloud") || weather.includes("overcast")) color = "200, 200, 220";
+    // Star Trek Beam Colors
+    let color = isDay ? "255, 220, 150" : "180, 220, 255";
+    if (weather.includes("rain")) color = "150, 180, 255";
+    if (weather.includes("snow")) color = "255, 255, 255";
 
-    const particles = Array.from({length: 70}, () => ({
+    const particles = Array.from({length: 120}, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        size: Math.random() * 2 + 1,
-        speed: Math.random() * 2 + 0.5,
-        beam: Math.random() > 0.85,
-        beamH: Math.random() * 80 + 40,
-        drift: (Math.random() - 0.5) * 0.5
+        size: Math.random() * 2 + 0.5,
+        speed: Math.random() * 4 + 2,
+        opacity: Math.random(),
+        shimmer: Math.random() * 0.1 + 0.02,
+        beam: Math.random() > 0.7,
+        beamWidth: Math.random() * 3 + 1
     }));
 
     function loop() {
@@ -402,34 +438,38 @@ function startTransporterEffect(env = null) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         particles.forEach(p => {
-            if (weather.includes("rain")) {
-                p.y += p.speed * 5;
-                p.x += p.drift;
-                if (p.y > canvas.height) p.y = -20;
-            } else if (weather.includes("snow")) {
-                p.y += p.speed * 1.5;
-                p.x += Math.sin(Date.now() / 1000 + p.y) * 1;
-                if (p.y > canvas.height) p.y = -20;
-            } else {
-                p.y -= p.speed;
-                if (p.y < -100) p.y = canvas.height + 100;
+            // Shimmering Vertical Beam Effect
+            p.y -= p.speed;
+            p.opacity += p.shimmer;
+            if (p.opacity > 1 || p.opacity < 0) p.shimmer = -p.shimmer;
+            
+            if (p.y < -100) {
+                p.y = canvas.height + 100;
+                p.x = Math.random() * canvas.width;
             }
 
-            if (p.x < -50) p.x = canvas.width + 50;
-            if (p.x > canvas.width + 50) p.x = -50;
+            const finalAlpha = Math.max(0, Math.min(1, p.opacity)) * 0.7;
 
-            const alpha = 0.4 + Math.sin(Date.now() / 300 + p.x) * 0.2;
-            
-            if (p.beam && !weather.includes("snow")) {
-                ctx.fillStyle = `rgba(${color}, ${alpha * 0.4})`;
-                ctx.fillRect(p.x, p.y, weather.includes("rain") ? 2 : 1, p.beamH);
+            if (p.beam) {
+                const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + 150);
+                grad.addColorStop(0, `rgba(${color}, 0)`);
+                grad.addColorStop(0.5, `rgba(${color}, ${finalAlpha * 0.5})`);
+                grad.addColorStop(1, `rgba(${color}, 0)`);
+                ctx.fillStyle = grad;
+                ctx.fillRect(p.x - p.beamWidth/2, p.y, p.beamWidth, 150);
             }
-            
-            ctx.fillStyle = `rgba(${color}, ${alpha})`;
+
+            ctx.fillStyle = `rgba(${color}, ${finalAlpha})`;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fill();
+            
+            // Add subtle glow to particles
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = `rgba(${color}, ${finalAlpha})`;
         });
+        
+        ctx.shadowBlur = 0;
         animId = requestAnimationFrame(loop);
     }
     loop();
@@ -441,7 +481,13 @@ function stopTransporterEffect() {
     if (canvas) canvas.classList.remove('active'); 
 }
 
-function toggleAccordion(id) { const el = document.getElementById(id); const chev = document.getElementById('debug-chevron'); const isOpen = el.style.display === 'block'; el.style.display = isOpen ? 'none' : 'block'; if(chev) chev.innerText = isOpen ? '▼' : '▲'; }
+function toggleAccordion(id) { 
+    const el = document.getElementById(id); 
+    const chev = document.getElementById('debug-chevron'); 
+    const isOpen = el.style.display === 'block'; 
+    el.style.display = isOpen ? 'none' : 'block'; 
+    if(chev) chev.innerText = isOpen ? '▼' : '▲'; 
+}
 
 function switchTab(tab, btn) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -459,20 +505,125 @@ function switchSubTab(tab) {
     if (activeBtn) activeBtn.classList.add('active');
 }
 
-function requestLocation() { if (!navigator.geolocation || state.settings.locMode === 'custom') return; navigator.geolocation.getCurrentPosition(pos => { state.lat = pos.coords.latitude; state.lon = pos.coords.longitude; document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2); fetch("/api/proxy/nominatim?lat=" + state.lat + "&lon=" + state.lon).then(r => r.json()).then(data => { state.city = data.address.city || data.address.town || data.address.village || "Unknown"; state.state = data.address.state || ""; state.country = data.address.country || ""; renderPOISelectors(); }); }); }
-function getThemeForDate() { const now = new Date(); const ord = (now.getMonth() + 1) * 100 + now.getDate(); const match = state.settings.themes.find(t => ord >= t.Begin && ord <= t.End); return match ? match.Theme : "General"; }
-function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); location.reload(); } }
-function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; loadEditorPrompt(); } }
-function openFullRes() { const src = document.getElementById('result-image').src; if (src) window.open(src, '_blank'); }
+function requestLocation() { 
+    if (!navigator.geolocation || state.settings.locMode === 'custom') return; 
+    navigator.geolocation.getCurrentPosition(pos => { 
+        state.lat = pos.coords.latitude; 
+        state.lon = pos.coords.longitude; 
+        if (document.getElementById('coord-text')) document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2); 
+        fetch("/api/proxy/nominatim?lat=" + state.lat + "&lon=" + state.lon)
+            .then(r => r.json())
+            .then(data => { 
+                state.city = data.address.city || data.address.town || data.address.village || "Unknown"; 
+                state.state = data.address.state || ""; 
+                state.country = data.address.country || ""; 
+                renderPOISelectors(); 
+            }); 
+    }); 
+}
 
-function renderProfiles() { const list = document.getElementById('profile-list'); if(!list) return; list.innerHTML = ""; state.settings.profiles.forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div><div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
-function renderRemoteProfileList() { const list = document.getElementById('remote-profile-list'); if(!list) return; list.innerHTML = ""; state.remoteProfiles.forEach(name => { const row = document.createElement('div'); row.className = 'list-item'; const active = (name === state.currentProfile) ? " (Active)" : ""; row.innerHTML = `<div><div class="list-item-title">${name}${active}</div><div class="list-item-sub">Cloud</div></div><div><button onclick="switchRemoteProfile('${name}')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Switch</button><button onclick="deleteRemoteProfile('${name}')" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
-async function deleteRemoteProfile(name) { if (name === 'default') return alert("Cannot delete default profile"); if (!confirm(`Delete cloud profile '${name}'?`)) return; try { await fetch(`/api/config?profile=${encodeURIComponent(name)}&secret=${encodeURIComponent(state.settings.syncSecret)}`, { method: 'DELETE' }); await refreshRemoteProfiles(); } catch(e) {} }
-async function createRemoteProfile() { const name = prompt("New Cloud Profile Name:"); if (!name) return; state.currentProfile = name; await save(); }
-async function purgeCloudData() { if (!state.settings.syncSecret) return alert("Sync Secret required."); const pin = prompt("Enter Maintenance PIN:"); if (!pin) return; try { const res = await fetch(`/api/maintenance/purge?secret=${encodeURIComponent(state.settings.syncSecret)}&pin=${encodeURIComponent(pin)}`); const data = await res.json(); alert(data.success ? "Purge Successful!" : "Purge Failed."); } catch(e) { alert("Error."); } }
-function saveProfile() { const name = prompt("Profile Name:"); if (!name) return; state.settings.profiles.push({ name, ...state.settings }); renderProfiles(); }
-function loadProfile(i) { state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; setupUI(); applyAppearance(); alert("Loaded!"); }
-function deleteProfile(i) { state.settings.profiles.splice(i, 1); renderProfiles(); }
+function getThemeForDate() { 
+    const now = new Date(); 
+    const ord = (now.getMonth() + 1) * 100 + now.getDate(); 
+    const match = state.settings.themes.find(t => ord >= t.Begin && ord <= t.End); 
+    return match ? match.Theme : "General"; 
+}
+
+function resetApp() { 
+    if(confirm("Wipe everything and reset to defaults?")) { 
+        localStorage.clear(); 
+        location.reload(); 
+    } 
+}
+
+function resetPrompts() { 
+    if(confirm("Reset templates to factory defaults?")) { 
+        state.settings.promptDay = DEFAULT_DAY_STR; 
+        state.settings.promptNight = DEFAULT_NIGHT_STR; 
+        state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR;
+        state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR;
+        loadEditorPrompt(); 
+        save();
+    } 
+}
+
+function openFullRes() { 
+    const src = document.getElementById('result-image').src; 
+    if (src && !src.includes('placeholder')) window.open(src, '_blank'); 
+}
+
+function renderProfiles() { 
+    const list = document.getElementById('profile-list'); 
+    if(!list) return; 
+    list.innerHTML = ""; 
+    state.settings.profiles.forEach((p, i) => { 
+        const row = document.createElement('div'); 
+        row.className = 'list-item'; 
+        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div><div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        list.appendChild(row); 
+    }); 
+}
+
+function renderRemoteProfileList() { 
+    const list = document.getElementById('remote-profile-list'); 
+    if(!list) return; 
+    list.innerHTML = ""; 
+    state.remoteProfiles.forEach(name => { 
+        const row = document.createElement('div'); 
+        row.className = 'list-item'; 
+        const active = (name === state.currentProfile) ? " (Active)" : ""; 
+        row.innerHTML = `<div><div class="list-item-title">${name}${active}</div><div class="list-item-sub">Cloud</div></div><div><button onclick="switchRemoteProfile('${name}')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Switch</button><button onclick="deleteRemoteProfile('${name}')" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        list.appendChild(row); 
+    }); 
+}
+
+async function deleteRemoteProfile(name) { 
+    if (name === 'default') return alert("Cannot delete default profile"); 
+    if (!confirm(`Delete cloud profile '${name}'?`)) return; 
+    try { 
+        await fetch(`/api/config?profile=${encodeURIComponent(name)}&secret=${encodeURIComponent(state.settings.syncSecret)}`, { method: 'DELETE' }); 
+        await refreshRemoteProfiles(); 
+    } catch(e) {} 
+}
+
+async function createRemoteProfile() { 
+    const name = prompt("New Cloud Profile Name:"); 
+    if (!name) return; 
+    state.currentProfile = name; 
+    await save(); 
+}
+
+async function purgeCloudData() { 
+    if (!state.settings.syncSecret) return alert("Sync Secret required."); 
+    const pin = prompt("Enter Maintenance PIN:"); 
+    if (!pin) return; 
+    try { 
+        const res = await fetch(`/api/maintenance/purge?secret=${encodeURIComponent(state.settings.syncSecret)}&pin=${encodeURIComponent(pin)}`); 
+        const data = await res.json(); 
+        alert(data.success ? "Purge Successful!" : "Purge Failed."); 
+    } catch(e) { alert("Error."); } 
+}
+
+function saveProfile() { 
+    const name = prompt("Profile Name:"); 
+    if (!name) return; 
+    state.settings.profiles.push({ name, ...state.settings }); 
+    renderProfiles(); 
+    save();
+}
+
+function loadProfile(i) { 
+    state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; 
+    setupUI(); 
+    applyAppearance(); 
+    alert("Loaded!"); 
+}
+
+function deleteProfile(i) { 
+    state.settings.profiles.splice(i, 1); 
+    renderProfiles(); 
+    save();
+}
 
 function renderLocations() {
     const list = document.getElementById('location-list');
@@ -497,19 +648,144 @@ function renderLocations() {
     }
     renderPOISelectors();
 }
-function deleteLocation(i) { state.settings.locations.splice(i, 1); renderLocations(); }
-function renderPOISelectors() { const sel = document.getElementById('poi-city-select'); if(!sel) return; sel.innerHTML = ""; const cachedCities = Object.keys(state.settings.poiCache); const savedCities = state.settings.locations.map(l => l.city.toLowerCase()); const allCities = [...new Set([...cachedCities, ...savedCities])].sort(); allCities.forEach(city => { const opt = document.createElement('option'); opt.value = city; opt.innerText = city.toUpperCase(); sel.appendChild(opt); }); renderPOIs(); }
-function renderPOIs() { const list = document.getElementById('poi-list'); if(!list) return; const city = document.getElementById('poi-city-select').value; list.innerHTML = ""; if (!city || !state.settings.poiCache[city]) return; state.settings.poiCache[city].forEach((p, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div><div><button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; list.appendChild(row); }); }
-function deletePOI(city, i) { state.settings.poiCache[city].splice(i, 1); renderPOIs(); }
-function deleteCity() { const city = document.getElementById('poi-city-select').value; if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return; delete state.settings.poiCache[city]; renderPOISelectors(); }
-async function discoverPOIs(btn) { const city = state.city; const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states"); let rawPrompt = isUS ? state.settings.promptPOIDomestic : state.settings.promptPOIIntl; rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country); if(btn) { btn.disabled = true; btn.innerText = "Finding..."; } try { const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey }; const res = await fetch("/api/proxy/poi", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await res.json(); const cityKey = city.toLowerCase().trim(); if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = []; if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data]; else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description}); renderPOISelectors(); } catch(e) { console.error("Discovery error:", e); } finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } } }
-async function consultPOI(city, i) { const p = state.settings.poiCache[city][i]; const btn = event ? event.currentTarget : null; if(btn) { btn.disabled = true; btn.innerText = "..."; } try { const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); p.description = data.description; renderPOIs(); } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } } }
-function renderThemes() { const list = document.getElementById('theme-list'); if(!list) return; list.innerHTML = ""; state.settings.themes.forEach((t, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
-function addThemePrompt() { const Theme = prompt("Theme:"); const Begin = prompt("Start MMDD:"); const End = prompt("End MMDD:"); if (Theme && Begin && End) { state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); renderThemes(); } }
-function deleteTheme(i) { state.settings.themes.splice(i, 1); renderThemes(); }
-function renderStyles() { const list = document.getElementById('style-list'); if(!list) return; list.innerHTML = ""; state.settings.styles.forEach((s, i) => { const row = document.createElement('div'); row.className = 'list-item'; row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; list.appendChild(row); }); }
-function addStylePrompt() { const s = prompt("New Style:"); if(s) { state.settings.styles.push(s); renderStyles(); } }
-function deleteStyle(i) { state.settings.styles.splice(i, 1); renderStyles(); }
+
+function deleteLocation(i) { 
+    state.settings.locations.splice(i, 1); 
+    renderLocations(); 
+    save();
+}
+
+function renderPOISelectors() { 
+    const sel = document.getElementById('poi-city-select'); 
+    if(!sel) return; 
+    sel.innerHTML = ""; 
+    const cachedCities = Object.keys(state.settings.poiCache); 
+    const savedCities = state.settings.locations.map(l => l.city.toLowerCase()); 
+    const allCities = [...new Set([...cachedCities, ...savedCities])].sort(); 
+    allCities.forEach(city => { 
+        const opt = document.createElement('option'); 
+        opt.value = city; opt.innerText = city.toUpperCase(); 
+        sel.appendChild(opt); 
+    }); 
+    renderPOIs(); 
+}
+
+function renderPOIs() { 
+    const list = document.getElementById('poi-list'); 
+    if(!list) return; 
+    const city = document.getElementById('poi-city-select').value; 
+    list.innerHTML = ""; 
+    if (!city || !state.settings.poiCache[city]) return; 
+    state.settings.poiCache[city].forEach((p, i) => { 
+        const row = document.createElement('div'); 
+        row.className = 'list-item'; 
+        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div><div><button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        list.appendChild(row); 
+    }); 
+}
+
+function deletePOI(city, i) { 
+    state.settings.poiCache[city].splice(i, 1); 
+    renderPOIs(); 
+    save();
+}
+
+function deleteCity() { 
+    const city = document.getElementById('poi-city-select').value; 
+    if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return; 
+    delete state.settings.poiCache[city]; 
+    renderPOISelectors(); 
+    save();
+}
+
+async function discoverPOIs(btn) { 
+    const city = state.city; 
+    const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states"); 
+    let rawPrompt = isUS ? state.settings.promptPOIDomestic : state.settings.promptPOIIntl; 
+    rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country); 
+    if(btn) { btn.disabled = true; btn.innerText = "Finding..."; } 
+    try { 
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey }; 
+        const res = await fetch("/api/proxy/poi", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+        const data = await res.json(); 
+        const cityKey = city.toLowerCase().trim(); 
+        if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = []; 
+        if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data]; 
+        else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description}); 
+        renderPOISelectors(); 
+        save();
+    } catch(e) { console.error("Discovery error:", e); } 
+    finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } } 
+}
+
+async function consultPOI(city, i) { 
+    const p = state.settings.poiCache[city][i]; 
+    const btn = event ? event.currentTarget : null; 
+    if(btn) { btn.disabled = true; btn.innerText = "..."; } 
+    try { 
+        const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); 
+        const data = await res.json(); 
+        p.description = data.description; 
+        renderPOIs(); 
+        save();
+    } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } } 
+}
+
+function renderThemes() { 
+    const list = document.getElementById('theme-list'); 
+    if(!list) return; 
+    list.innerHTML = ""; 
+    state.settings.themes.forEach((t, i) => { 
+        const row = document.createElement('div'); 
+        row.className = 'list-item'; 
+        row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; 
+        list.appendChild(row); 
+    }); 
+}
+
+function addThemePrompt() { 
+    const Theme = prompt("Theme Name:"); 
+    const Begin = prompt("Start Date (MMDD, e.g. 1015 for Oct 15):"); 
+    const End = prompt("End Date (MMDD, e.g. 1031 for Oct 31):"); 
+    if (Theme && Begin && End) { 
+        state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); 
+        renderThemes(); 
+        save();
+    } 
+}
+
+function deleteTheme(i) { 
+    state.settings.themes.splice(i, 1); 
+    renderThemes(); 
+    save();
+}
+
+function renderStyles() { 
+    const list = document.getElementById('style-list'); 
+    if(!list) return; 
+    list.innerHTML = ""; 
+    state.settings.styles.forEach((s, i) => { 
+        const row = document.createElement('div'); 
+        row.className = 'list-item'; 
+        row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; 
+        list.appendChild(row); 
+    }); 
+}
+
+function addStylePrompt() { 
+    const s = prompt("New Style Name:"); 
+    if(s) { 
+        state.settings.styles.push(s); 
+        renderStyles(); 
+        save();
+    } 
+}
+
+function deleteStyle(i) { 
+    state.settings.styles.splice(i, 1); 
+    renderStyles(); 
+    save();
+}
 
 async function fetchUsageStats() {
     const key = state.settings.apiKey; const container = document.getElementById('usage-stats');
@@ -524,14 +800,29 @@ async function fetchUsageStats() {
 }
 
 function exportData(type) { 
-    let data; if (type === 'pois') data = state.settings.poiCache; else if (type === 'themes') data = state.settings.themes; else if (type === 'styles') data = state.settings.styles; else if (type === 'locations') data = state.settings.locations; else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight }; else data = state.settings;
+    let data; 
+    if (type === 'pois') data = state.settings.poiCache; 
+    else if (type === 'themes') data = state.settings.themes; 
+    else if (type === 'styles') data = state.settings.styles; 
+    else if (type === 'locations') data = state.settings.locations; 
+    else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight, poidomestic: state.settings.promptPOIDomestic, poiintl: state.settings.promptPOIIntl }; 
+    else data = state.settings;
+    
     document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
 }
 
-function openImport(type) { state.importType = type; document.getElementById('import-title').innerText = "Import " + type.toUpperCase(); document.getElementById('import-text').value = ""; document.getElementById('import-modal').classList.add('active'); }
-function closeImport() { document.getElementById('import-modal').classList.remove('active'); }
+function openImport(type) { 
+    state.importType = type; 
+    document.getElementById('import-title').innerText = "Import " + type.toUpperCase(); 
+    document.getElementById('import-text').value = ""; 
+    document.getElementById('import-modal').classList.add('active'); 
+}
+
+function closeImport() { 
+    document.getElementById('import-modal').classList.remove('active'); 
+}
 
 function confirmImport() {
     let raw = document.getElementById('import-text').value;
@@ -582,8 +873,10 @@ function confirmImport() {
             Object.assign(state.settings, parsed);
             setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); applyAppearance();
         } else if (state.importType === 'prompts') {
-            state.settings.promptDay = parsed.day || DEFAULT_DAY_STR;
-            state.settings.promptNight = parsed.night || DEFAULT_NIGHT_STR;
+            state.settings.promptDay = parsed.day || state.settings.promptDay;
+            state.settings.promptNight = parsed.night || state.settings.promptNight;
+            state.settings.promptPOIDomestic = parsed.poidomestic || state.settings.promptPOIDomestic;
+            state.settings.promptPOIIntl = parsed.poiintl || state.settings.promptPOIIntl;
             loadEditorPrompt();
         }
         
@@ -596,34 +889,88 @@ function confirmImport() {
     }
 }
 
-function openPOIModal() { document.getElementById('modal-poi-city').value = state.city; document.getElementById('modal-poi-name').value = ""; document.getElementById('modal-poi-desc').value = ""; document.getElementById('poi-modal').classList.add('active'); }
-function closePOIModal() { document.getElementById('poi-modal').classList.remove('active'); }
+function openPOIModal() { 
+    document.getElementById('modal-poi-city').value = state.city; 
+    document.getElementById('modal-poi-name').value = ""; 
+    document.getElementById('modal-poi-desc').value = ""; 
+    document.getElementById('poi-modal').classList.add('active'); 
+}
+
+function closePOIModal() { 
+    document.getElementById('poi-modal').classList.remove('active'); 
+}
 
 async function savePOIModal() {
-    const city = document.getElementById('modal-poi-city').value; const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value;
-    if (!city || !name) return alert("City/Name required");
-    if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; state.settings.poiCache[city].push({name, description: desc});
-    renderPOISelectors(); closePOIModal();
-}
-async function sanitizePOIModal() {
-    const name = document.getElementById('modal-poi-name').value; const desc = document.getElementById('modal-poi-desc').value; const city = document.getElementById('modal-poi-city').value; if (!name) return alert("Name first");
-    const btn = document.getElementById('btn-modal-sanitize'); btn.disabled = true; btn.innerText = "...";
-    try { const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); const data = await res.json(); document.getElementById('modal-poi-name').value = data.name; document.getElementById('modal-poi-desc').value = data.description; } finally { btn.disabled = false; btn.innerText = "✨ AI Sanitize"; }
+    const city = document.getElementById('modal-poi-city').value; 
+    const name = document.getElementById('modal-poi-name').value; 
+    const desc = document.getElementById('modal-poi-desc').value;
+    if (!city || !name) return alert("City and Name are required");
+    if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; 
+    state.settings.poiCache[city].push({name, description: desc});
+    renderPOISelectors(); 
+    closePOIModal();
+    save();
 }
 
-function openLocationModal() { document.getElementById('modal-loc-city').value = ""; document.getElementById('modal-loc-state').value = ""; document.getElementById('modal-loc-country').value = ""; document.getElementById('modal-loc-lat').value = ""; document.getElementById('modal-loc-lon').value = ""; document.getElementById('loc-modal').classList.add('active'); }
-function closeLocationModal() { document.getElementById('loc-modal').classList.remove('active'); }
+async function sanitizePOIModal() {
+    const name = document.getElementById('modal-poi-name').value; 
+    const desc = document.getElementById('modal-poi-desc').value; 
+    const city = document.getElementById('modal-poi-city').value; 
+    if (!name) return alert("Please enter a name first");
+    const btn = document.getElementById('btn-modal-sanitize'); 
+    btn.disabled = true; btn.innerText = "...";
+    try { 
+        const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); 
+        const data = await res.json(); 
+        document.getElementById('modal-poi-name').value = data.name; 
+        document.getElementById('modal-poi-desc').value = data.description; 
+    } finally { 
+        btn.disabled = false; btn.innerText = "✨ AI Sanitize"; 
+    }
+}
+
+function openLocationModal() { 
+    document.getElementById('modal-loc-city').value = ""; 
+    document.getElementById('modal-loc-state').value = ""; 
+    document.getElementById('modal-loc-country').value = ""; 
+    document.getElementById('modal-loc-lat').value = ""; 
+    document.getElementById('modal-loc-lon').value = ""; 
+    document.getElementById('loc-modal').classList.add('active'); 
+}
+
+function closeLocationModal() { 
+    document.getElementById('loc-modal').classList.remove('active'); 
+}
 
 function saveLocationModal() {
-    const city = document.getElementById('modal-loc-city').value; const lat = parseFloat(document.getElementById('modal-loc-lat').value); const lon = parseFloat(document.getElementById('modal-loc-lon').value);
-    if (!city || isNaN(lat) || isNaN(lon)) return alert("Invalid Location");
+    const city = document.getElementById('modal-loc-city').value; 
+    const lat = parseFloat(document.getElementById('modal-loc-lat').value); 
+    const lon = parseFloat(document.getElementById('modal-loc-lon').value);
+    if (!city || isNaN(lat) || isNaN(lon)) return alert("Invalid Location Data");
     state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
-    renderLocations(); closeLocationModal();
+    renderLocations(); 
+    closeLocationModal();
+    save();
 }
+
 async function autofillLocation() {
-    const city = document.getElementById('modal-loc-city').value; const stateVal = document.getElementById('modal-loc-state').value; if (!city) return alert("Enter city");
-    const btn = document.getElementById('btn-loc-autofill'); btn.disabled = true; btn.innerText = "...";
-    try { const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); const data = await res.json(); if (data && data.length > 0) { const top = data[0]; document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); } } catch(e) { alert("Error"); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
+    const city = document.getElementById('modal-loc-city').value; 
+    const stateVal = document.getElementById('modal-loc-state').value; 
+    if (!city) return alert("Please enter a city name");
+    const btn = document.getElementById('btn-loc-autofill'); 
+    btn.disabled = true; btn.innerText = "...";
+    try { 
+        const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); 
+        const data = await res.json(); 
+        if (data && data.length > 0) { 
+            const top = data[0]; 
+            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); 
+            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); 
+        } 
+    } catch(e) { alert("Error during autofill"); } 
+    finally { 
+        btn.disabled = false; btn.innerText = "✨ AI Autofill"; 
+    }
 }
 
 function applySavedLoc(i) {
@@ -639,6 +986,7 @@ function applySavedLoc(i) {
     const coordText = document.getElementById('coord-text');
     if (coordText) coordText.innerText = "Saved: " + state.city;
     renderPOISelectors();
+    applyAppearance();
 }
 
 function toggleCustomLoc() {
@@ -665,7 +1013,7 @@ window.openImport = openImport;
 window.confirmImport = confirmImport;
 window.closeImport = closeImport;
 window.exportData = exportData;
-window.clearCategory = (t) => { state.settings[t] = []; location.reload(); };
+window.clearCategory = (t) => { state.settings[t] = []; save(); location.reload(); };
 window.openPOIModal = openPOIModal;
 window.closePOIModal = closePOIModal;
 window.savePOIModal = savePOIModal;
@@ -699,3 +1047,5 @@ window.toggleCustomRes = toggleCustomRes;
 window.toggleAccordion = toggleAccordion;
 window.startTransporterEffect = startTransporterEffect;
 window.stopTransporterEffect = stopTransporterEffect;
+window.state = state;
+window.STORAGE_KEY = STORAGE_KEY;
