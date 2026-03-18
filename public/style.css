@@ -54,11 +54,11 @@ header {
 #header-title {
     font-size: 24px;
     font-weight: 800;
-    background: linear-gradient(135deg, var(--accent-color), #5ac8fa, #ff2d55);
-    background-size: 300% 300%;
+    background: linear-gradient(135deg, #007aff, #5ac8fa, #ff2d55, #ff9500, #af52de);
+    background-size: 400% 400%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: gradientShift 8s ease infinite;
+    animation: gradientShift 5s ease infinite;
     margin-left: 20px;
 }
 
@@ -66,6 +66,40 @@ header {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
+}
+
+.btn-sync {
+    width: auto !important;
+    padding: 6px 12px !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    border-radius: 8px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-sync.dirty {
+    border: 2px solid #ff3b30 !important;
+    box-shadow: 0 0 15px rgba(255, 59, 48, 0.4);
+    animation: syncPulse 2s infinite;
+}
+
+@keyframes syncPulse {
+    0% { box-shadow: 0 0 5px rgba(255, 59, 48, 0.4); }
+    50% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.8); border-color: #ff453a !important; }
+    100% { box-shadow: 0 0 5px rgba(255, 59, 48, 0.4); }
+}
+
+#firefly-canvas {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.9; /* Increased visibility */
+}
+
+.moon-glow {
+    filter: blur(30px);
+    background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 70%);
 }
 
 .container { width: 100%; max-width: 600px; margin: 0 auto; padding: 0 20px 120px 20px; }
@@ -78,7 +112,7 @@ header {
 .preview-card {
     position: relative;
     width: 100%;
-    min-height: 500px; /* Force it to be larger initially */
+    min-height: 600px; /* Force it to be larger initially */
     max-height: var(--max-preview-height);
     aspect-ratio: 1290 / 2796;
     margin: 0 auto 30px auto;
