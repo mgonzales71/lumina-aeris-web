@@ -1,9 +1,9 @@
-// Lumina Aeris Web & Worker - App Logic v1.16.4
+// Lumina Aeris Web & Worker - App Logic v1.18.0
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 // Self-Healing Import & Solar-Aware Transporter Restoration.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
-const STORAGE_KEY = 'lumina_v1.16.4';
+const STORAGE_KEY = 'lumina_v1.18.0';
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_POI_DOMESTIC_STR = "You are an expert in identifying unique and notable points of interest, views, and vistas of the requested locations. Please provide one item per line without any formatting or citations. Generate a list of up to 30 visually distinct points of interest, landmarks, or vistas in or near {city}, {state_region}. Take your time to conduct a comprehensive search. Formatting Guidelines: 1. Provide only a raw JSON array of objects. 2. Exclude markdown code blocks (no backticks). 3. Omit any introductory or concluding text. 4. Each object must have precisely two keys: \"name\" and \"description\". 5. The \"description\" should consist of one to two concise sentences that visually describe the named point of interest.";
@@ -32,16 +32,15 @@ var state = {
 };
 
 let animId = null;
+let isDirty = false;
 
 // --- 2. INITIALIZATION ---
 window.onload = async () => {
-    // Load localStorage BEFORE applyAppearance
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
         try { Object.assign(state.settings, JSON.parse(saved)); } catch(e) {}
     } else {
-        // Migration from previous versions
-        const oldKeys = ['lumina_v1.16.3', 'lumina_v1.16.2', 'lumina_v1.15.3'];
+        const oldKeys = ['lumina_v1.16.4', 'lumina_v1.16.3', 'lumina_v1.16.2', 'lumina_v1.15.3'];
         for (const key of oldKeys) {
             const oldData = localStorage.getItem(key);
             if (oldData) {
@@ -54,7 +53,6 @@ window.onload = async () => {
         }
     }
     
-    // Initial call to applyAppearance must be awaited to prevent flickers
     await applyAppearance();
 
     if (state.settings.syncSecret) {
@@ -63,11 +61,23 @@ window.onload = async () => {
     }
     
     await fetchModels();
-    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles(); renderLocations();
+    setupUI(); renderThemes(); renderPOISelectors(); renderProfiles(); renderStyles(); renderLocations(); updateSyncUI();
     
     if (state.settings.locMode === 'gps') requestLocation();
     else if (state.settings.locMode === 'custom') applySavedLoc(state.settings.customLocIdx || 0);
 };
+
+function updateSyncUI() {
+    const btn = document.getElementById('btn-cloud-sync');
+    if (!btn) return;
+    if (isDirty) {
+        btn.classList.add('dirty');
+        btn.innerText = "☁️ Sync Changes";
+    } else {
+        btn.classList.remove('dirty');
+        btn.innerText = "☁️ Cloud Synced";
+    }
+}
 
 async function applyAppearance() {
     const body = document.body;
@@ -79,7 +89,6 @@ async function applyAppearance() {
         return;
     }
 
-    // Auto mode: Solar Awareness
     let isDay = true;
     try {
         const res = await fetch(`/api/proxy/weather?lat=${state.lat}&lon=${state.lon}`);
@@ -90,7 +99,6 @@ async function applyAppearance() {
             throw new Error("Weather fetch failed");
         }
     } catch (e) {
-        // Fallback: Clock-based logic (6AM - 6PM)
         const hour = new Date().getHours();
         isDay = (hour >= 6 && hour < 18);
     }
@@ -118,7 +126,8 @@ async function switchRemoteProfile(name) {
             if (remote && remote.promptDay) {
                 state.settings = remote;
                 state.currentProfile = name;
-                setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); await applyAppearance();
+                isDirty = false;
+                setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); renderRemoteProfileList(); await applyAppearance(); updateSyncUI();
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings)); 
             }
         }
@@ -143,8 +152,17 @@ async function save() {
 async function manualCloudSync() {
     const btn = document.getElementById('btn-cloud-sync');
     const orig = btn.innerText; btn.disabled = true; btn.innerText = "Syncing...";
-    try { await save(); btn.innerText = "✅ Synced!"; setTimeout(() => { btn.innerText = orig; btn.disabled = false; }, 2000); }
-    catch(e) { btn.innerText = "❌ Error"; setTimeout(() => { btn.innerText = orig; btn.disabled = false; }, 2000); }
+    try { 
+        await save(); 
+        isDirty = false;
+        updateSyncUI();
+        btn.innerText = "✅ Synced!"; 
+        setTimeout(() => { btn.innerText = "☁️ Cloud Synced"; btn.disabled = false; updateSyncUI(); }, 2000); 
+    }
+    catch(e) { 
+        btn.innerText = "❌ Error"; 
+        setTimeout(() => { btn.disabled = false; updateSyncUI(); }, 2000); 
+    }
 }
 
 async function fetchModels() {
@@ -245,6 +263,7 @@ function saveEditorPrompt() {
     else if (mode === 'night') state.settings.promptNight = val;
     else if (mode === 'poidomestic') state.settings.promptPOIDomestic = val;
     else if (mode === 'poiintl') state.settings.promptPOIIntl = val;
+    isDirty = true; updateSyncUI();
     save();
 }
 
@@ -268,6 +287,7 @@ async function syncSettings() {
     state.settings.seed = parseInt(document.getElementById('set-seed').value);
     state.settings.negEnable = document.getElementById('set-neg-enable').checked;
     state.settings.negativePrompt = document.getElementById('set-neg').value;
+    isDirty = true; updateSyncUI();
     await applyAppearance();
     save();
 }
@@ -286,15 +306,18 @@ async function handleGenerate() {
     btn.innerText = "Initializing...";
 
     try {
-        // 1. Get Environmental Data
         const envRes = await fetch(`/api/proxy/weather?lat=${state.lat}&lon=${state.lon}`);
         const env = await envRes.json();
         
-        // 2. Start Transporter (Star Trek Inspired Beam)
-        startTransporterEffect(env);
+        let engineType = 'stardust';
+        const wDesc = (env.weather_desc || "").toLowerCase();
+        if (wDesc.includes('rain')) engineType = 'rain';
+        else if (wDesc.includes('snow')) engineType = 'snow';
+        else if (!env.is_day) engineType = 'moon';
+        startWeatherEngine(engineType);
+        
         btn.innerText = "Transporting...";
 
-        // 3. POI Selection
         const cityKey = state.city.toLowerCase().trim();
         if (!state.settings.poiCache[cityKey] || state.settings.poiCache[cityKey].length === 0) {
             btn.innerText = "Discovering...";
@@ -307,27 +330,15 @@ async function handleGenerate() {
         }
         const poi = pois[Math.floor(Math.random() * pois.length)] || pois[0];
         
-        // 4. Build Prompt
         const theme = getThemeForDate();
         const rawP = buildPrompt(env, poi, theme);
         const cleanP = browserSanitize(rawP) || "Wallpaper of " + poi.name;
         
-        // Debugging
         if (document.getElementById('debug-prompt')) document.getElementById('debug-prompt').innerText = cleanP;
-        const debugVars = {
-            "City": state.city,
-            "Weather": env.weather_desc,
-            "Theme": theme,
-            "POI": poi.name,
-            "Time": env.is_day ? "Day" : "Night",
-            "Solar": `Rise: ${env.sunrise}, Set: ${env.sunset}`
-        };
         if (document.getElementById('debug-vars')) {
-            document.getElementById('debug-vars').innerHTML = Object.entries(debugVars)
-                .map(([k,v]) => `<div><span style="opacity:0.5">${k}:</span> ${v}</div>`).join('');
+            document.getElementById('debug-vars').innerHTML = `<div><span style=\"opacity:0.5\">City:</span> ${state.city}</div><div><span style=\"opacity:0.5\">Weather:</span> ${env.weather_desc}</div><div><span style=\"opacity:0.5\">Theme:</span> ${theme}</div><div><span style=\"opacity:0.5\">POI:</span> ${poi.name}</div>`;
         }
 
-        // 5. Pollinations Request
         let w, h;
         if (state.settings.resolution === 'custom') {
             w = state.settings.customResW; h = state.settings.customResH;
@@ -345,20 +356,17 @@ async function handleGenerate() {
         if (state.settings.quality) url += "&quality=" + state.settings.quality;
         if (state.settings.negEnable && state.settings.negativePrompt) url += "&negative_prompt=" + encodeURIComponent(state.settings.negativePrompt);
 
-        // 6. Finalize UI
         const img = document.getElementById('result-image');
         img.classList.remove('loaded');
         img.src = url;
         
         img.onload = () => {
             img.classList.add('loaded');
-            stopTransporterEffect();
+            stopWeatherEngine();
             document.getElementById('placeholder').style.display = 'none';
             
             const activeTemplate = env.is_day ? state.settings.promptDay : state.settings.promptNight;
-            const hasPOI = activeTemplate.includes("{poi_name}");
-            
-            if (hasPOI) {
+            if (activeTemplate.includes("{poi_name}")) {
                 if (state.settings.overlayLabel) {
                     document.getElementById('poi-label').innerText = poi.name;
                     document.getElementById('poi-label').style.display = 'block';
@@ -382,16 +390,14 @@ async function handleGenerate() {
         };
         
         img.onerror = () => {
-            throw new Error("Failed to load image from generator.");
+            throw new Error("Failed to load image");
         };
 
     } catch (e) {
-        console.error(e);
-        alert("Generation Error: " + e.message);
         btn.disabled = false;
         btn.innerText = "Generate Wallpaper";
         state.isGenerating = false;
-        stopTransporterEffect();
+        stopWeatherEngine();
     }
 }
 
@@ -404,7 +410,7 @@ function buildPrompt(env, poi, theme) {
 
 function browserSanitize(input) { return input.toString().replace(/[\n\r]/g, " ").replace(/%/g, " percent").replace(/[&#?\/\\"]/g, "").trim(); }
 
-function startTransporterEffect(env = null) {
+function startWeatherEngine(type = 'stardust') {
     const canvas = document.getElementById('firefly-canvas');
     if (!canvas) return;
     if (animId) cancelAnimationFrame(animId);
@@ -414,68 +420,78 @@ function startTransporterEffect(env = null) {
     canvas.width = canvas.parentElement.clientWidth;
     canvas.height = canvas.parentElement.clientHeight;
     
-    const isDay = env ? env.is_day : true;
-    const weather = (env && env.weather_desc) ? env.weather_desc.toLowerCase() : "clear";
+    const isDark = document.body.classList.contains('theme-dark');
     
-    // Star Trek Beam Colors
-    let color = isDay ? "255, 220, 150" : "180, 220, 255";
-    if (weather.includes("rain")) color = "150, 180, 255";
-    if (weather.includes("snow")) color = "255, 255, 255";
+    const pMain = isDark ? "255, 255, 255" : "0, 0, 0"; 
+    const pAlt = isDark ? "0, 200, 255" : "60, 60, 60"; 
+    const twinkleColor = isDark ? "255, 255, 0" : "255, 180, 0"; 
 
-    const particles = Array.from({length: 120}, () => ({
+    let particles = Array.from({length: type === 'rain' ? 120 : 80}, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        size: Math.random() * 2 + 0.5,
-        speed: Math.random() * 4 + 2,
+        size: Math.random() * (type === 'snow' ? 4 : 2) + 0.5,
+        speed: Math.random() * 3 + 1,
         opacity: Math.random(),
-        shimmer: Math.random() * 0.1 + 0.02,
-        beam: Math.random() > 0.7,
-        beamWidth: Math.random() * 3 + 1
+        angle: Math.random() * Math.PI * 2,
+        twinkle: Math.random() > 0.8
     }));
 
     function loop() {
         if (!canvas.classList.contains('active')) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
+        if (type === 'moon') {
+            const cx = canvas.width * 0.8;
+            const cy = canvas.height * 0.2;
+            const radius = 35;
+            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.5);
+            glow.addColorStop(0, `rgba(${twinkleColor}, 0.3)`);
+            glow.addColorStop(1, `rgba(${twinkleColor}, 0)`);
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(cx, cy, radius * 2.5, 0, Math.PI * 2); ctx.fill();
+            
+            ctx.fillStyle = isDark ? "#EEE" : "#444";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = `rgba(${twinkleColor}, 0.5)`;
+            ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
         particles.forEach(p => {
-            // Shimmering Vertical Beam Effect
-            p.y -= p.speed;
-            p.opacity += p.shimmer;
-            if (p.opacity > 1 || p.opacity < 0) p.shimmer = -p.shimmer;
-            
-            if (p.y < -100) {
-                p.y = canvas.height + 100;
-                p.x = Math.random() * canvas.width;
+            if (type === 'stardust' || type === 'moon') {
+                p.y -= p.speed;
+                if (p.y < -10) p.y = canvas.height + 10;
+                ctx.fillStyle = p.twinkle ? `rgba(${twinkleColor}, ${p.opacity})` : `rgba(${pMain}, ${p.opacity})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            } else if (type === 'rain') {
+                p.y += p.speed * 5;
+                if (p.y > canvas.height) {
+                    ctx.beginPath();
+                    ctx.ellipse(p.x, canvas.height - 2, p.size * 3, p.size, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${pAlt}, 0.2)`;
+                    ctx.stroke();
+                    p.y = -20;
+                    p.x = Math.random() * canvas.width;
+                }
+                ctx.strokeStyle = `rgba(${pAlt}, 0.5)`;
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + 12); ctx.stroke();
+            } else if (type === 'snow') {
+                p.y += p.speed;
+                p.x += Math.sin(p.angle) * 1.2;
+                p.angle += 0.03;
+                if (p.y > canvas.height) p.y = -10;
+                ctx.fillStyle = `rgba(${pMain}, ${p.opacity})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             }
-
-            const finalAlpha = Math.max(0, Math.min(1, p.opacity)) * 0.7;
-
-            if (p.beam) {
-                const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + 150);
-                grad.addColorStop(0, `rgba(${color}, 0)`);
-                grad.addColorStop(0.5, `rgba(${color}, ${finalAlpha * 0.5})`);
-                grad.addColorStop(1, `rgba(${color}, 0)`);
-                ctx.fillStyle = grad;
-                ctx.fillRect(p.x - p.beamWidth/2, p.y, p.beamWidth, 150);
-            }
-
-            ctx.fillStyle = `rgba(${color}, ${finalAlpha})`;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Add subtle glow to particles
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = `rgba(${color}, ${finalAlpha})`;
         });
         
-        ctx.shadowBlur = 0;
         animId = requestAnimationFrame(loop);
     }
     loop();
 }
 
-function stopTransporterEffect() { 
+function stopWeatherEngine() { 
     if (animId) cancelAnimationFrame(animId); 
     const canvas = document.getElementById('firefly-canvas');
     if (canvas) canvas.classList.remove('active'); 
@@ -510,7 +526,6 @@ function requestLocation() {
     navigator.geolocation.getCurrentPosition(pos => { 
         state.lat = pos.coords.latitude; 
         state.lon = pos.coords.longitude; 
-        if (document.getElementById('coord-text')) document.getElementById('coord-text').innerText = "GPS: " + state.lat.toFixed(2); 
         fetch("/api/proxy/nominatim?lat=" + state.lat + "&lon=" + state.lon)
             .then(r => r.json())
             .then(data => { 
@@ -542,6 +557,7 @@ function resetPrompts() {
         state.settings.promptNight = DEFAULT_NIGHT_STR; 
         state.settings.promptPOIDomestic = DEFAULT_POI_DOMESTIC_STR;
         state.settings.promptPOIIntl = DEFAULT_POI_INTL_STR;
+        isDirty = true; updateSyncUI();
         loadEditorPrompt(); 
         save();
     } 
@@ -559,7 +575,7 @@ function renderProfiles() {
     state.settings.profiles.forEach((p, i) => { 
         const row = document.createElement('div'); 
         row.className = 'list-item'; 
-        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">Local</div></div><div><button onclick="loadProfile(${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Load</button><button onclick="deleteProfile(${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        row.innerHTML = `<div><div class=\"list-item-title\">${p.name}</div><div class=\"list-item-sub\">Local</div></div><div><button onclick=\"loadProfile(${i})\" style=\"color:var(--accent-color); background:none; border:none; margin-right:10px;\">Load</button><button onclick=\"deleteProfile(${i})\" style=\"color:#ff3b30; background:none; border:none;\">Del</button></div>`; 
         list.appendChild(row); 
     }); 
 }
@@ -572,7 +588,7 @@ function renderRemoteProfileList() {
         const row = document.createElement('div'); 
         row.className = 'list-item'; 
         const active = (name === state.currentProfile) ? " (Active)" : ""; 
-        row.innerHTML = `<div><div class="list-item-title">${name}${active}</div><div class="list-item-sub">Cloud</div></div><div><button onclick="switchRemoteProfile('${name}')" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Switch</button><button onclick="deleteRemoteProfile('${name}')" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        row.innerHTML = `<div><div class=\"list-item-title\">${name}${active}</div><div class=\"list-item-sub\">Cloud</div></div><div><button onclick=\"switchRemoteProfile('${name}')\" style=\"color:var(--accent-color); background:none; border:none; margin-right:10px;\">Switch</button><button onclick=\"deleteRemoteProfile('${name}')\" style=\"color:#ff3b30; background:none; border:none;\">Del</button></div>`; 
         list.appendChild(row); 
     }); 
 }
@@ -590,6 +606,7 @@ async function createRemoteProfile() {
     const name = prompt("New Cloud Profile Name:"); 
     if (!name) return; 
     state.currentProfile = name; 
+    isDirty = true; updateSyncUI();
     await save(); 
 }
 
@@ -608,12 +625,14 @@ function saveProfile() {
     const name = prompt("Profile Name:"); 
     if (!name) return; 
     state.settings.profiles.push({ name, ...state.settings }); 
+    isDirty = true; updateSyncUI();
     renderProfiles(); 
     save();
 }
 
 function loadProfile(i) { 
     state.settings = { ...state.settings, ...JSON.parse(JSON.stringify(state.settings.profiles[i])) }; 
+    isDirty = true; updateSyncUI();
     setupUI(); 
     applyAppearance(); 
     alert("Loaded!"); 
@@ -621,6 +640,7 @@ function loadProfile(i) {
 
 function deleteProfile(i) { 
     state.settings.profiles.splice(i, 1); 
+    isDirty = true; updateSyncUI();
     renderProfiles(); 
     save();
 }
@@ -632,7 +652,7 @@ function renderLocations() {
         state.settings.locations.forEach((loc, i) => {
             const row = document.createElement('div');
             row.className = 'list-item';
-            row.innerHTML = `<div><div class="list-item-title">${loc.city}</div><div class="list-item-sub">${loc.state || loc.country}</div></div><button onclick="deleteLocation(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`;
+            row.innerHTML = `<div><div class=\"list-item-title\">${loc.city}</div><div class=\"list-item-sub\">${loc.state || loc.country}</div></div><button onclick=\"deleteLocation(${i})\" style=\"color:#ff3b30; background:none; border:none;\">Del</button>`;
             list.appendChild(row);
         });
     }
@@ -651,6 +671,7 @@ function renderLocations() {
 
 function deleteLocation(i) { 
     state.settings.locations.splice(i, 1); 
+    isDirty = true; updateSyncUI();
     renderLocations(); 
     save();
 }
@@ -679,13 +700,14 @@ function renderPOIs() {
     state.settings.poiCache[city].forEach((p, i) => { 
         const row = document.createElement('div'); 
         row.className = 'list-item'; 
-        row.innerHTML = `<div><div class="list-item-title">${p.name}</div><div class="list-item-sub">${p.description || ""}</div></div><div><button onclick="consultPOI('${city}', ${i})" style="color:var(--accent-color); background:none; border:none; margin-right:10px;">Consult</button><button onclick="deletePOI('${city}', ${i})" style="color:#ff3b30; background:none; border:none;">Del</button></div>`; 
+        row.innerHTML = `<div><div class=\"list-item-title\">${p.name}</div><div class=\"list-item-sub\">${p.description || \"\"}</div></div><div><button onclick=\"consultPOI('${city}', ${i})\" style=\"color:var(--accent-color); background:none; border:none; margin-right:10px;\">Consult</button><button onclick=\"deletePOI('${city}', ${i})\" style=\"color:#ff3b30; background:none; border:none;\">Del</button></div>`; 
         list.appendChild(row); 
     }); 
 }
 
 function deletePOI(city, i) { 
     state.settings.poiCache[city].splice(i, 1); 
+    isDirty = true; updateSyncUI();
     renderPOIs(); 
     save();
 }
@@ -694,61 +716,65 @@ function deleteCity() {
     const city = document.getElementById('poi-city-select').value; 
     if (!city || !confirm(`Delete all landmarks for ${city.toUpperCase()}?`)) return; 
     delete state.settings.poiCache[city]; 
+    isDirty = true; updateSyncUI();
     renderPOISelectors(); 
     save();
 }
 
 async function discoverPOIs(btn) { 
     const city = state.city; 
-    const isUS = state.country.toLowerCase().includes("usa") || state.country.toLowerCase().includes("united states"); 
+    const isUS = state.country.toLowerCase().includes(\"usa\") || state.country.toLowerCase().includes(\"united states\"); 
     let rawPrompt = isUS ? state.settings.promptPOIDomestic : state.settings.promptPOIIntl; 
     rawPrompt = rawPrompt.split('{city}').join(state.city).split('{state_region}').join(state.state).split('{country}').join(state.country); 
-    if(btn) { btn.disabled = true; btn.innerText = "Finding..."; } 
+    if(btn) { btn.disabled = true; btn.innerText = \"Finding...\"; } 
     try { 
-        const payload = { prompt: rawPrompt, model: state.settings.textModel || "gemini-search", key: state.settings.apiKey }; 
-        const res = await fetch("/api/proxy/poi", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+        const payload = { prompt: rawPrompt, model: state.settings.textModel || \"gemini-search\", key: state.settings.apiKey }; 
+        const res = await fetch(\"/api/proxy/poi\", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
         const data = await res.json(); 
         const cityKey = city.toLowerCase().trim(); 
         if (!state.settings.poiCache[cityKey]) state.settings.poiCache[cityKey] = []; 
         if (Array.isArray(data)) state.settings.poiCache[cityKey] = [...state.settings.poiCache[cityKey], ...data]; 
         else if (data.name) state.settings.poiCache[cityKey].push({name: data.name, description: data.description}); 
+        isDirty = true; updateSyncUI();
         renderPOISelectors(); 
         save();
-    } catch(e) { console.error("Discovery error:", e); } 
-    finally { if(btn) { btn.disabled = false; btn.innerText = "✨ AI Discover"; } } 
+    } catch(e) { console.error(\"Discovery error:\", e); } 
+    finally { if(btn) { btn.disabled = false; btn.innerText = \"✨ AI Discover\"; } } 
 }
 
 async function consultPOI(city, i) { 
     const p = state.settings.poiCache[city][i]; 
     const btn = event ? event.currentTarget : null; 
-    if(btn) { btn.disabled = true; btn.innerText = "..."; } 
+    if(btn) { btn.disabled = true; btn.innerText = \"...\"; } 
     try { 
-        const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); 
+        const res = await fetch(\"/api/proxy/consult?name=\" + encodeURIComponent(p.name) + \"&city=\" + encodeURIComponent(city) + (state.settings.apiKey ? \"&key=\"+state.settings.apiKey : \"\")); 
         const data = await res.json(); 
         p.description = data.description; 
+        isDirty = true; updateSyncUI();
         renderPOIs(); 
         save();
-    } finally { if(btn) { btn.disabled = false; btn.innerText = "Consult"; } } 
+    } finally { if(btn) { btn.disabled = false; btn.innerText = \"Consult\"; } } 
 }
 
 function renderThemes() { 
     const list = document.getElementById('theme-list'); 
     if(!list) return; 
-    list.innerHTML = ""; 
+    list.innerHTML = \"\"; 
     state.settings.themes.forEach((t, i) => { 
         const row = document.createElement('div'); 
         row.className = 'list-item'; 
-        row.innerHTML = `<div><div class="list-item-title">${t.Theme}</div><div class="list-item-sub">${t.Begin} - ${t.End}</div></div><button onclick="deleteTheme(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; 
+        row.innerHTML = `<div><div class=\"list-item-title\">${t.Theme}</div><div class=\"list-item-sub\">${t.Begin} - ${t.End}</div></div><button onclick=\"deleteTheme(${i})\" style=\"color:#ff3b30; background:none; border:none;\">Del</button>`; 
         list.appendChild(row); 
     }); 
 }
 
 function addThemePrompt() { 
-    const Theme = prompt("Theme Name:"); 
-    const Begin = prompt("Start Date (MMDD, e.g. 1015 for Oct 15):"); 
-    const End = prompt("End Date (MMDD, e.g. 1031 for Oct 31):"); 
+    const Theme = prompt(\"Theme Name:\"); 
+    const Begin = prompt(\"Start Date (MMDD, e.g. 1015 for Oct 15):\"); 
+    const End = prompt(\"End Date (MMDD, e.g. 1031 for Oct 31):\"); 
     if (Theme && Begin && End) { 
         state.settings.themes.push({Theme, Begin: parseInt(Begin), End: parseInt(End)}); 
+        isDirty = true; updateSyncUI();
         renderThemes(); 
         save();
     } 
@@ -756,6 +782,7 @@ function addThemePrompt() {
 
 function deleteTheme(i) { 
     state.settings.themes.splice(i, 1); 
+    isDirty = true; updateSyncUI();
     renderThemes(); 
     save();
 }
@@ -763,19 +790,20 @@ function deleteTheme(i) {
 function renderStyles() { 
     const list = document.getElementById('style-list'); 
     if(!list) return; 
-    list.innerHTML = ""; 
+    list.innerHTML = \"\"; 
     state.settings.styles.forEach((s, i) => { 
         const row = document.createElement('div'); 
         row.className = 'list-item'; 
-        row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; 
+        row.innerHTML = `<div><div class=\"list-item-title\">${s}</div></div><button onclick=\"deleteStyle(${i})\" style=\"color:#ff3b30; background:none; border:none;\">Del</button>`; 
         list.appendChild(row); 
     }); 
 }
 
 function addStylePrompt() { 
-    const s = prompt("New Style Name:"); 
+    const s = prompt(\"New Style Name:\"); 
     if(s) { 
         state.settings.styles.push(s); 
+        isDirty = true; updateSyncUI();
         renderStyles(); 
         save();
     } 
@@ -783,20 +811,21 @@ function addStylePrompt() {
 
 function deleteStyle(i) { 
     state.settings.styles.splice(i, 1); 
+    isDirty = true; updateSyncUI();
     renderStyles(); 
     save();
 }
 
 async function fetchUsageStats() {
     const key = state.settings.apiKey; const container = document.getElementById('usage-stats');
-    if (!key) { container.innerHTML = "No API key found."; return; }
-    container.innerHTML = "Fetching...";
+    if (!key) { container.innerHTML = \"No API key found.\"; return; }
+    container.innerHTML = \"Fetching...\";
     try {
         const pRes = await fetch(`/api/proxy/account/profile?key=${encodeURIComponent(key)}`); const pData = await pRes.json();
         const bRes = await fetch(`/api/proxy/account/balance?key=${encodeURIComponent(key)}`); const bData = await bRes.json();
-        const balance = bData.balance ?? bData.totalBalance ?? pData.balance ?? "N/A";
-        container.innerHTML = `<div>Balance: <span style="color:#fff; font-weight:bold;">${Number(balance).toFixed(2)} Pollen</span></div><div style="margin-top:4px;">Tier: <span style="color:#fff; font-weight:bold;">${pData.tier || "Standard"}</span></div>`;
-    } catch(e) { container.innerHTML = "Error fetching stats."; }
+        const balance = bData.balance ?? bData.totalBalance ?? pData.balance ?? \"N/A\";
+        container.innerHTML = `<div>Balance: <span style=\"color:#fff; font-weight:bold;\">${Number(balance).toFixed(2)} Pollen</span></div><div style=\"margin-top:4px;\">Tier: <span style=\"color:#fff; font-weight:bold;\">${pData.tier || \"Standard\"}</span></div>`;
+    } catch(e) { container.innerHTML = \"Error fetching stats.\"; }
 }
 
 function exportData(type) { 
@@ -808,15 +837,15 @@ function exportData(type) {
     else if (type === 'prompts') data = { day: state.settings.promptDay, night: state.settings.promptNight, poidomestic: state.settings.promptPOIDomestic, poiintl: state.settings.promptPOIIntl }; 
     else data = state.settings;
     
-    document.getElementById('import-title').innerText = "Export " + type.toUpperCase();
+    document.getElementById('import-title').innerText = \"Export \" + type.toUpperCase();
     document.getElementById('import-text').value = JSON.stringify(data, null, 2);
     document.getElementById('import-modal').classList.add('active');
 }
 
 function openImport(type) { 
     state.importType = type; 
-    document.getElementById('import-title').innerText = "Import " + type.toUpperCase(); 
-    document.getElementById('import-text').value = ""; 
+    document.getElementById('import-title').innerText = \"Import \" + type.toUpperCase(); 
+    document.getElementById('import-text').value = \"\"; 
     document.getElementById('import-modal').classList.add('active'); 
 }
 
@@ -829,7 +858,6 @@ function confirmImport() {
     if (!raw) return closeImport();
     
     try {
-        // Advanced Self-Healing: Locate JSON boundaries
         const startBrace = raw.indexOf('{');
         const startBracket = raw.indexOf('[');
         let start = -1;
@@ -841,18 +869,16 @@ function confirmImport() {
         const endBracket = raw.lastIndexOf(']');
         let end = Math.max(endBrace, endBracket);
 
-        if (start === -1 || end === -1) throw new Error("No JSON structure detected in input.");
+        if (start === -1 || end === -1) throw new Error(\"No JSON structure detected in input.\");
 
         let jsonStr = raw.substring(start, end + 1);
-
-        // Sanitize: fix quotes, handle trailing commas, remove comments
         let cleaned = jsonStr
-            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // smart quotes
-            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") // smart single quotes
-            .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width chars
-            .replace(/,\s*([\]}])/g, '$1') // trailing commas
-            .replace(/\/\/.*$/gm, "") // line comments
-            .replace(/\/\*[\s\S]*?\*\//g, "") // block comments
+            .replace(/[\\u201C\\u201D\\u201E\\u201F\\u2033\\u2036]/g, '\"') 
+            .replace(/[\\u2018\\u2019\\u201A\\u201B\\u2032\\u2035]/g, \"'\") 
+            .replace(/[\\u200B-\\u200D\\uFEFF]/g, \"\") 
+            .replace(/,\\s*([\]}])/g, '$1') 
+            .replace(/\\/\\/.*$/gm, \"\") 
+            .replace(/\\/\\*[\\s\\S]*?\\*\\//g, \"\") 
             .trim();
 
         const parsed = JSON.parse(cleaned);
@@ -880,19 +906,20 @@ function confirmImport() {
             loadEditorPrompt();
         }
         
+        isDirty = true; updateSyncUI();
         save();
-        alert("Import successful! Data has been healed and integrated.");
+        alert(\"Import successful!\");
         closeImport();
     } catch(e) {
-        console.error("Heal Error:", e);
-        alert("Import failed even after healing: " + e.message);
+        console.error(\"Heal Error:\", e);
+        alert(\"Import failed: \" + e.message);
     }
 }
 
 function openPOIModal() { 
     document.getElementById('modal-poi-city').value = state.city; 
-    document.getElementById('modal-poi-name').value = ""; 
-    document.getElementById('modal-poi-desc').value = ""; 
+    document.getElementById('modal-poi-name').value = \"\"; 
+    document.getElementById('modal-poi-desc').value = \"\"; 
     document.getElementById('poi-modal').classList.add('active'); 
 }
 
@@ -904,9 +931,10 @@ async function savePOIModal() {
     const city = document.getElementById('modal-poi-city').value; 
     const name = document.getElementById('modal-poi-name').value; 
     const desc = document.getElementById('modal-poi-desc').value;
-    if (!city || !name) return alert("City and Name are required");
+    if (!city || !name) return alert(\"City and Name are required\");
     if (!state.settings.poiCache[city]) state.settings.poiCache[city] = []; 
     state.settings.poiCache[city].push({name, description: desc});
+    isDirty = true; updateSyncUI();
     renderPOISelectors(); 
     closePOIModal();
     save();
@@ -916,25 +944,25 @@ async function sanitizePOIModal() {
     const name = document.getElementById('modal-poi-name').value; 
     const desc = document.getElementById('modal-poi-desc').value; 
     const city = document.getElementById('modal-poi-city').value; 
-    if (!name) return alert("Please enter a name first");
+    if (!name) return alert(\"Please enter a name first\");
     const btn = document.getElementById('btn-modal-sanitize'); 
-    btn.disabled = true; btn.innerText = "...";
+    btn.disabled = true; btn.innerText = \"...\";
     try { 
-        const res = await fetch("/api/proxy/sanitize?name=" + encodeURIComponent(name) + "&description=" + encodeURIComponent(desc) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); 
+        const res = await fetch(\"/api/proxy/sanitize?name=\" + encodeURIComponent(name) + \"&description=\" + encodeURIComponent(desc) + \"&city=\" + encodeURIComponent(city) + (state.settings.apiKey ? \"&key=\"+state.settings.apiKey : \"\")); 
         const data = await res.json(); 
         document.getElementById('modal-poi-name').value = data.name; 
         document.getElementById('modal-poi-desc').value = data.description; 
     } finally { 
-        btn.disabled = false; btn.innerText = "✨ AI Sanitize"; 
+        btn.disabled = false; btn.innerText = \"✨ AI Sanitize\"; 
     }
 }
 
 function openLocationModal() { 
-    document.getElementById('modal-loc-city').value = ""; 
-    document.getElementById('modal-loc-state').value = ""; 
-    document.getElementById('modal-loc-country').value = ""; 
-    document.getElementById('modal-loc-lat').value = ""; 
-    document.getElementById('modal-loc-lon').value = ""; 
+    document.getElementById('modal-loc-city').value = \"\"; 
+    document.getElementById('modal-loc-state').value = \"\"; 
+    document.getElementById('modal-loc-country').value = \"\"; 
+    document.getElementById('modal-loc-lat').value = \"\"; 
+    document.getElementById('modal-loc-lon').value = \"\"; 
     document.getElementById('loc-modal').classList.add('active'); 
 }
 
@@ -946,8 +974,9 @@ function saveLocationModal() {
     const city = document.getElementById('modal-loc-city').value; 
     const lat = parseFloat(document.getElementById('modal-loc-lat').value); 
     const lon = parseFloat(document.getElementById('modal-loc-lon').value);
-    if (!city || isNaN(lat) || isNaN(lon)) return alert("Invalid Location Data");
+    if (!city || isNaN(lat) || isNaN(lon)) return alert(\"Invalid Location Data\");
     state.settings.locations.push({ city, state: document.getElementById('modal-loc-state').value, country: document.getElementById('modal-loc-country').value, lat, lon });
+    isDirty = true; updateSyncUI();
     renderLocations(); 
     closeLocationModal();
     save();
@@ -956,20 +985,20 @@ function saveLocationModal() {
 async function autofillLocation() {
     const city = document.getElementById('modal-loc-city').value; 
     const stateVal = document.getElementById('modal-loc-state').value; 
-    if (!city) return alert("Please enter a city name");
+    if (!city) return alert(\"Please enter a city name\");
     const btn = document.getElementById('btn-loc-autofill'); 
-    btn.disabled = true; btn.innerText = "...";
+    btn.disabled = true; btn.innerText = \"...\";
     try { 
-        const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); 
+        const res = await fetch(\"/api/proxy/nominatim?q=\" + encodeURIComponent(city + (stateVal ? \", \" + stateVal : \"\"))); 
         const data = await res.json(); 
         if (data && data.length > 0) { 
             const top = data[0]; 
             document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); 
             document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); 
         } 
-    } catch(e) { alert("Error during autofill"); } 
+    } catch(e) { alert(\"Error during autofill\"); } 
     finally { 
-        btn.disabled = false; btn.innerText = "✨ AI Autofill"; 
+        btn.disabled = false; btn.innerText = \"✨ AI Autofill\"; 
     }
 }
 
@@ -981,10 +1010,10 @@ function applySavedLoc(i) {
     const loc = state.settings.locations[i];
     if(!loc) return;
     state.lat = loc.lat; state.lon = loc.lon;
-    state.city = loc.city; state.state = loc.state || ""; state.country = loc.country || "USA";
+    state.city = loc.city; state.state = loc.state || \"\"; state.country = loc.country || \"USA\";
     state.settings.customLocIdx = i;
     const coordText = document.getElementById('coord-text');
-    if (coordText) coordText.innerText = "Saved: " + state.city;
+    if (coordText) coordText.innerText = \"Saved: \" + state.city;
     renderPOISelectors();
     applyAppearance();
 }
@@ -1013,7 +1042,7 @@ window.openImport = openImport;
 window.confirmImport = confirmImport;
 window.closeImport = closeImport;
 window.exportData = exportData;
-window.clearCategory = (t) => { state.settings[t] = []; save(); location.reload(); };
+window.clearCategory = (t) => { state.settings[t] = []; isDirty = true; updateSyncUI(); save(); location.reload(); };
 window.openPOIModal = openPOIModal;
 window.closePOIModal = closePOIModal;
 window.savePOIModal = savePOIModal;
@@ -1045,7 +1074,7 @@ window.fetchUsageStats = fetchUsageStats;
 window.applyAppearance = applyAppearance;
 window.toggleCustomRes = toggleCustomRes;
 window.toggleAccordion = toggleAccordion;
-window.startTransporterEffect = startTransporterEffect;
-window.stopTransporterEffect = stopTransporterEffect;
+window.startWeatherEngine = startWeatherEngine;
+window.stopWeatherEngine = stopWeatherEngine;
 window.state = state;
 window.STORAGE_KEY = STORAGE_KEY;
