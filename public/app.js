@@ -877,8 +877,8 @@ function confirmImport() {
             .replace(/[\\u2018\\u2019\\u201A\\u201B\\u2032\\u2035]/g, "'") 
             .replace(/[\\u200B-\\u200D\\uFEFF]/g, "") 
             .replace(/,\\s*([\]}])/g, '$1') 
-            .replace(/\\/\\/.*$/gm, "") 
-            .replace(/\\/\\*[\\s\\S]*?\\*\\//g, "") 
+            .replace(/\/\/.*$/gm, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "")
             .trim();
 
         const parsed = JSON.parse(cleaned);
