@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Data Logic v1.19.7
+// Lumina Aeris Web & Worker - Data Logic v1.19.9
 
 function openImport(type) { 
     state.importType = type; 
@@ -32,18 +32,19 @@ function confirmImport() {
 
         let jsonStr = raw.substring(start, end + 1);
 
-        // Step 2: Robust JSON Healing Logic (v1.19.5)
-        // Apply cleaning to the extracted JSON string
+        // Step 2: Robust JSON Healing Logic (v1.19.8) - Refined
+        // Focus on removing problematic invisible/non-standard characters and correcting smart quotes
         let cleaned = jsonStr
+            .replace(/[\u200B-\u200D\uFEFF]/g, "") // Zero-width spaces and BOM
+            .replace(/[\x00-\x1F\x7F]/g, "") // Strict ASCII Control characters and DEL
             .replace(/\/\/.*$/gm, "") // Remove single-line comments
             .replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
-            .replace(/[\n\r\t]/g, " ") // Replace newlines/tabs with spaces
-            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') 
-            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") 
-            .replace(/[\u200B-\u200D\uFEFF]/g, "") 
-            .replace(/,\s*([\]}])/g, '$1') // Fix trailing commas
-            .replace(/\\"/g, "\"") // Unescape escaped quotes before parsing
             .trim();
+
+        // Replace smart quotes and similar with standard quotes
+        cleaned = cleaned
+            .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') 
+            .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
 
         const parsed = JSON.parse(cleaned);
         
