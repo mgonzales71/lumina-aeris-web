@@ -246,11 +246,18 @@ function deleteTheme(i) {
 
 function renderStyles() { 
     const list = document.getElementById('style-list'); if(!list) return; list.innerHTML = ""; 
+    const select = document.getElementById('set-style'); if(select) select.innerHTML = "";
     state.settings.styles.forEach((s, i) => { 
         const row = document.createElement('div'); row.className = 'list-item'; 
         row.innerHTML = `<div><div class="list-item-title">${s}</div></div><button onclick="deleteStyle(${i})" style="color:#ff3b30; background:none; border:none;">Del</button>`; 
         list.appendChild(row); 
+
+        if(select) { 
+            const opt = document.createElement('option'); opt.value = s; opt.innerText = s; 
+            select.appendChild(opt); 
+        }
     }); 
+    if(select) select.value = state.settings.style;
 }
 
 function addStylePrompt() { 

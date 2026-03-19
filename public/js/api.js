@@ -30,20 +30,7 @@ async function switchRemoteProfile(name) {
     } catch(e) { console.error("Sync Pull failed", e); }
 }
 
-async function save() { 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings)); 
-    if (state.settings.syncSecret) {
-        try {
-            const profile = state.currentProfile || "default";
-            await fetch(`/api/config?profile=${encodeURIComponent(profile)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Lumina-Secret": state.settings.syncSecret },
-                body: JSON.stringify(state.settings)
-            });
-            await refreshRemoteProfiles();
-        } catch(e) {}
-    }
-}
+
 
 async function manualCloudSync() {
     const btn = document.getElementById('btn-cloud-sync');
@@ -74,7 +61,7 @@ async function fetchModels() {
             });
             sel.value = state.settings.model || "gptimage";
         }
-    } catch(e) {}
+    } catch(e) { console.error("Error fetching image models:", e); }
     try {
         const txtRes = await fetch('https://gen.pollinations.ai/text/models');
         const txtModels = await txtRes.json();
@@ -88,7 +75,7 @@ async function fetchModels() {
             });
             tsel.value = state.settings.textModel || "gemini-search";
         }
-    } catch(e) {}
+    } catch(e) { console.error("Error fetching text models:", e); }
 }
 
 function requestLocation() {
@@ -148,10 +135,9 @@ async function discoverPOIs(btn) {
     }
 }
 
-async function consultPOI(city, i) { 
-    const p = state.settings.poiCache[city][i]; 
-    const btn = event ? event.currentTarget : null; 
-    if(btn) { btn.disabled = true; btn.innerText = "..."; } 
+async function consultPOI(city, i, e) {
+    const p = state.settings.poiCache[city][i];
+    const btn = e ? e.currentTarget : null;    if(btn) { btn.disabled = true; btn.innerText = "..."; } 
     try { 
         const res = await fetch("/api/proxy/consult?name=" + encodeURIComponent(p.name) + "&city=" + encodeURIComponent(city) + (state.settings.apiKey ? "&key="+state.settings.apiKey : "")); 
         const data = await res.json(); p.description = data.description; 
