@@ -1,8 +1,8 @@
-// Lumina Aeris Web & Worker - App Logic v1.19.3
+// Lumina Aeris Web & Worker - App Logic v1.19.4
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 // --- 1. GLOBALS & DEFAULT CONSTANTS ---
-const STORAGE_KEY = 'lumina_v1.19.3';
+const STORAGE_KEY = 'lumina_v1.19.4';
 const DEFAULT_DAY_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Sun at {sunrise} and {sunset} for realistic positioning. Adjust sun visibility based on {weather}. Include the UV index and visibility in the depiction. Account for cloud cover to influence lighting and shadows. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 const DEFAULT_NIGHT_STR = "Generate a {style} style image of {poi_name} in {city}, {state_region}. POI description: {poi_desc}. Ensure architectural and geographical accuracy based on real-world references. Time: {time_of_day} {datetime}. Weather: {weather}, {temperature}. Moon in {moon_phase} with {moon_illumination} illumination. Account for moonrise {moonrise} and moonset {moonset} for realistic positioning. Adjust moon visibility based on {weather}. Safe Zone Framing: keep significant elements centered and critical content within 80-90 percent of the image width and height. Atmosphere: incorporate the theme of {theme} as a subtle, realistic element. Apply a professional, natural-looking auto-enhancement: brighten shadows, recover highlights, boost midtone contrast, and enhance clarity while preserving a photorealistic look.";
 
@@ -46,12 +46,34 @@ var weatherAstro = null;
 window.onload = async () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-        try { Object.assign(state.settings, JSON.parse(saved)); } catch(e) {}
+        try {
+            const parsed = JSON.parse(saved);
+            // Manually merge to preserve array types for collections
+            state.settings = { ...state.settings, ...parsed }; // Shallow merge for scalar values
+            
+            // Ensure collections are arrays and merge contents if necessary
+            if (parsed.themes && Array.isArray(parsed.themes)) state.settings.themes = parsed.themes;
+            if (parsed.styles && Array.isArray(parsed.styles)) state.settings.styles = parsed.styles;
+            if (parsed.locations && Array.isArray(parsed.locations)) state.settings.locations = parsed.locations;
+            
+            // poiCache is an object of arrays, so handle deep merge
+            if (parsed.poiCache) {
+                for (const city in parsed.poiCache) {
+                    if (Array.isArray(parsed.poiCache[city])) {
+                        if (!state.settings.poiCache[city]) state.settings.poiCache[city] = [];
+                        state.settings.poiCache[city] = [...parsed.poiCache[city]];
+                    }
+                }
+            }
+            // profiles is an array of objects which can also contain settings
+            if (parsed.profiles && Array.isArray(parsed.profiles)) state.settings.profiles = parsed.profiles;
+
+        } catch(e) { console.error("Error loading saved settings:", e); }
     } else {
         const oldKeys = ['lumina_v1.19.1', 'lumina_v1.19.0', 'lumina_v1.18.1', 'lumina_v1.16.4', 'lumina_v1.16.2', 'lumina_v1.15.3'];
         for (const k of oldKeys) {
             const old = localStorage.getItem(k);
-            if (old) { try { Object.assign(state.settings, JSON.parse(old)); save(); break; } catch(e) {} }
+            if (old) { try { Object.assign(state.settings, JSON.parse(old)); save(); break; } catch(e) { console.error("Error loading old saved settings:", e); } }
         }
     }
     

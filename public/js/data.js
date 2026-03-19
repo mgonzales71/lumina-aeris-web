@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Data Logic v1.19.3
+// Lumina Aeris Web & Worker - Data Logic v1.19.4
 
 function openImport(type) { 
     state.importType = type; 
@@ -48,7 +48,25 @@ function confirmImport() {
         else if (state.importType === 'styles') { state.settings.styles = parsed; renderStyles(); }
         else if (state.importType === 'locations') { state.settings.locations = parsed; renderLocations(); }
         else if (state.importType === 'full') { 
-            Object.assign(state.settings, parsed); 
+            // Robust merge for full profile import
+            const currentSettings = { ...state.settings }; // Create a copy to merge into
+            Object.assign(currentSettings, parsed); // Shallow merge for scalar values
+
+            // Deep merge for collections
+            if (parsed.themes && Array.isArray(parsed.themes)) currentSettings.themes = parsed.themes;
+            if (parsed.styles && Array.isArray(parsed.styles)) currentSettings.styles = parsed.styles;
+            if (parsed.locations && Array.isArray(parsed.locations)) currentSettings.locations = parsed.locations;
+            if (parsed.poiCache) {
+                for (const city in parsed.poiCache) {
+                    if (Array.isArray(parsed.poiCache[city])) {
+                        if (!currentSettings.poiCache[city]) currentSettings.poiCache[city] = [];
+                        currentSettings.poiCache[city] = [...parsed.poiCache[city]];
+                    }
+                }
+            }
+            if (parsed.profiles && Array.isArray(parsed.profiles)) currentSettings.profiles = parsed.profiles;
+
+            state.settings = currentSettings; // Update the state with the merged settings
             setupUI(); renderThemes(); renderPOISelectors(); renderStyles(); renderLocations(); applyAppearance();
         }
         else if (state.importType === 'prompts') { 
@@ -201,7 +219,7 @@ function renderPOIs() {
     if(!list) return; 
     const city = document.getElementById('poi-city-select').value; 
     list.innerHTML = ""; 
-    if (!city || !state.settings.poiCache[city]) return; 
+    if (!city || !state.settings.poiCache[city] || !Array.isArray(state.settings.poiCache[city])) return; 
     state.settings.poiCache[city].forEach((p, i) => { 
         const row = document.createElement('div'); 
         row.className = 'list-item'; 

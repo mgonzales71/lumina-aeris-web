@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - API Logic v1.19.2
+// Lumina Aeris Web & Worker - API Logic v1.19.4
 
 async function refreshRemoteProfiles() {
     if (!state.settings.syncSecret) return;
@@ -153,12 +153,21 @@ async function autofillLocation() {
     try { 
         const res = await fetch("/api/proxy/nominatim?q=" + encodeURIComponent(city + (stateVal ? ", " + stateVal : ""))); 
         const data = await res.json(); 
-        if (data && data.length > 0) { 
-            const top = data[0]; 
-            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4); 
-            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4); 
-        } 
-    } catch(e) { alert("Error"); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
+        if (data && data.length > 0) {
+            const top = data[0];
+            document.getElementById('modal-loc-lat').value = parseFloat(top.lat).toFixed(4);
+            document.getElementById('modal-loc-lon').value = parseFloat(top.lon).toFixed(4);
+
+            // Attempt to get more precise address components
+            const addressRes = await fetch("/api/proxy/nominatim?lat=" + top.lat + "&lon=" + top.lon);
+            const addressData = await addressRes.json();
+
+            if (addressData && addressData.address) {
+                const address = addressData.address;
+                document.getElementById('modal-loc-state').value = address.state || address.region || "";
+                document.getElementById('modal-loc-country').value = address.country || "";
+            }
+        }    } catch(e) { alert("Error"); } finally { btn.disabled = false; btn.innerText = "✨ AI Autofill"; }
 }
 
 async function fetchUsageStats() {
@@ -193,8 +202,11 @@ async function handleGenerate() {
             btn.innerText = "Discovering..."; await discoverPOIs(null); 
         }
         
-        let pois = state.settings.poiCache[cityKey] || [{name: state.city, description: "A beautiful view"}];
-        const poi = pois[Math.floor(Math.random() * pois.length)] || pois[0];
+        let pois = state.settings.poiCache[cityKey] || [];
+        if (pois.length === 0) { // If no POIs after discovery, use a default
+            pois = [{name: state.city, description: "A beautiful view"}];
+        }
+        const poi = pois[Math.floor(Math.random() * pois.length)];
         const theme = getThemeForDate(); 
         btn.innerText = "Dreaming..."; 
         
