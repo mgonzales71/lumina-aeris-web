@@ -84,19 +84,7 @@ async function syncSettings() {
         await switchRemoteProfile('default');
     }
     
-    // Save to localStorage (now in utils.js) and potentially sync to cloud
-    save(); // This now handles localStorage save
-    if (state.settings.syncSecret) {
-        try {
-            const profile = state.currentProfile || "default";
-            await fetch(`/api/config?profile=${encodeURIComponent(profile)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Lumina-Secret": state.settings.syncSecret },
-                body: JSON.stringify(state.settings)
-            });
-            // refreshRemoteProfiles will be called by manualCloudSync or other sync points, not here.
-        } catch(e) { console.error("Cloud sync failed in syncSettings:", e); }
-    }
+    save(); // Call the unified save function
 
     isDirty = true; updateSyncUI();
     await applyAppearance();

@@ -125,6 +125,16 @@ function resetApp() { if(confirm("Wipe everything?")) { localStorage.clear(); lo
 
 function save() { 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+    if (state.settings.syncSecret) {
+        try {
+            const profile = state.currentProfile || "default";
+            fetch(`/api/config?profile=${encodeURIComponent(profile)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Lumina-Secret": state.settings.syncSecret },
+                body: JSON.stringify(state.settings)
+            });
+        } catch(e) { console.error("Cloud sync failed in save():", e); }
+    }
 }
 
 function resetPrompts() { if(confirm("Reset templates?")) { state.settings.promptDay = DEFAULT_DAY_STR; state.settings.promptNight = DEFAULT_NIGHT_STR; state.settings.promptDayIntl = DEFAULT_DAY_INTL_STR; state.settings.promptNightIntl = DEFAULT_NIGHT_INTL_STR; state.settings.promptPOIDomestic = DEFAULT_POI_DISCOVERY_PROMPT; state.settings.promptPOIIntl = DEFAULT_POI_DISCOVERY_PROMPT; loadEditorPrompt(); isDirty = true; updateSyncUI(); save(); } }

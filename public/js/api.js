@@ -37,11 +37,12 @@ async function manualCloudSync() {
     if (!btn) return;
     const orig = btn.innerText; btn.disabled = true; btn.innerText = "Syncing...";
     try {
-        await save();
+        await save(); // Call the unified save function
         isDirty = false; updateSyncUI();
         btn.innerText = "✅ Synced!";
         setTimeout(() => { btn.disabled = false; updateSyncUI(); }, 2000);
     } catch(e) {
+        console.error("Manual cloud sync failed:", e);
         btn.innerText = "❌ Error";
         setTimeout(() => { btn.disabled = false; updateSyncUI(); }, 2000);
     }
