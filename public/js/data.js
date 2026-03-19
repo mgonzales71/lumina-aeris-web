@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Data Logic v1.19.6
+// Lumina Aeris Web & Worker - Data Logic v1.19.7
 
 function openImport(type) { 
     state.importType = type; 
