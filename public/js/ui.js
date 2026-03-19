@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - UI Logic v1.19.5
+// Lumina Aeris Web & Worker - UI Logic v1.19.6
 
 function setupUI() {
     loadEditorPrompt();

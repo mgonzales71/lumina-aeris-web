@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Utility Logic v1.19.5
+// Lumina Aeris Web & Worker - Utility Logic v1.19.6
 
 function updateSyncUI() {
     const btn = document.getElementById('btn-cloud-sync');

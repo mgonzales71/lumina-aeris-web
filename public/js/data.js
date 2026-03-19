@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Data Logic v1.19.5
+// Lumina Aeris Web & Worker - Data Logic v1.19.6
 
 function openImport(type) { 
     state.importType = type; 
@@ -16,9 +16,25 @@ function confirmImport() {
     if (!raw) return closeImport();
     
     try {
-        // --- ROBUST JSON HEALING LOGIC (v1.19.4) ---
-        // Remove comments, newlines/tabs, and common problematic characters before parsing
-        let cleaned = raw
+        // Step 1: Extract the JSON string from potentially messy input
+        const startBrace = raw.indexOf('{');
+        const startBracket = raw.indexOf('[');
+        let start = -1;
+        if (startBrace !== -1 && startBracket !== -1) start = Math.min(startBrace, startBracket);
+        else if (startBrace !== -1) start = startBrace;
+        else if (startBracket !== -1) start = startBracket;
+
+        const endBrace = raw.lastIndexOf('}');
+        const endBracket = raw.lastIndexOf(']');
+        let end = Math.max(endBrace, endBracket);
+
+        if (start === -1 || end === -1 || end < start) throw new Error("No valid JSON structure detected. Ensure content starts with '{' or '[' and ends with '}' or ']'.");
+
+        let jsonStr = raw.substring(start, end + 1);
+
+        // Step 2: Robust JSON Healing Logic (v1.19.5)
+        // Apply cleaning to the extracted JSON string
+        let cleaned = jsonStr
             .replace(/\/\/.*$/gm, "") // Remove single-line comments
             .replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
             .replace(/[\n\r\t]/g, " ") // Replace newlines/tabs with spaces
