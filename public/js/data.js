@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - Data Logic v1.19.4
+// Lumina Aeris Web & Worker - Data Logic v1.19.5
 
 function openImport(type) { 
     state.importType = type; 
@@ -16,33 +16,21 @@ function confirmImport() {
     if (!raw) return closeImport();
     
     try {
-        const startBrace = raw.indexOf('{');
-        const startBracket = raw.indexOf('[');
-        let start = -1;
-        if (startBrace !== -1 && startBracket !== -1) start = Math.min(startBrace, startBracket);
-        else if (startBrace !== -1) start = startBrace;
-        else if (startBracket !== -1) start = startBracket;
-
-        const endBrace = raw.lastIndexOf('}');
-        const endBracket = raw.lastIndexOf(']');
-        let end = Math.max(endBrace, endBracket);
-
-        if (start === -1 || end === -1) throw new Error("No JSON structure detected.");
-
-        let jsonStr = raw.substring(start, end + 1);
-
-        // --- STABLE HEALING LOGIC (v1.19.2) ---
-        let cleaned = jsonStr
+        // --- ROBUST JSON HEALING LOGIC (v1.19.4) ---
+        // Remove comments, newlines/tabs, and common problematic characters before parsing
+        let cleaned = raw
+            .replace(/\/\/.*$/gm, "") // Remove single-line comments
+            .replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
+            .replace(/[\n\r\t]/g, " ") // Replace newlines/tabs with spaces
             .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') 
             .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'") 
             .replace(/[\u200B-\u200D\uFEFF]/g, "") 
-            .replace(/,\s*([\]}])/g, '$1') 
-            .replace(/\/\/.*$/gm, "") 
-            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/,\s*([\]}])/g, '$1') // Fix trailing commas
             .replace(/\\"/g, "\"") // Unescape escaped quotes before parsing
             .trim();
 
         const parsed = JSON.parse(cleaned);
+        
         
         if (state.importType === 'themes') {
             if (Array.isArray(parsed)) state.settings.themes = [...state.settings.themes, ...parsed];

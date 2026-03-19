@@ -1,4 +1,4 @@
-// Lumina Aeris Web & Worker - API Logic v1.19.4
+// Lumina Aeris Web & Worker - API Logic v1.19.5
 
 async function refreshRemoteProfiles() {
     if (!state.settings.syncSecret) return;
