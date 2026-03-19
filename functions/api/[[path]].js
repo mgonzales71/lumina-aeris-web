@@ -1,4 +1,4 @@
-// Lumina Aeris Web Backend - Functions v1.15.0
+// Lumina Aeris Web Backend - Functions v1.19.7
 // Mandate: NO Truncation. NO Minification. NO Missing Logic.
 
 const WMO_MAP = { 0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Fog", 61: "Rain", 71: "Snow", 95: "Thunderstorm" };
@@ -41,14 +41,14 @@ export async function onRequest(context) {
         return new Response(null, { headers: getCorsHeaders() });
     }
 
-    const SECRET_KEY = env.SECRET_KEY || 'ZeldaLink'; 
+    const SECRET_KEY = env.SECRET_KEY;
 
     try {
         // --- 0. Maintenance: Purge Old Data ---
         if (path === "/api/maintenance/purge") {
             const secret = url.searchParams.get("secret");
             const pin = url.searchParams.get("pin");
-            const REQUIRED_PIN = env.MAINTENANCE_PIN || "9999"; // Fallback if not set in Cloudflare
+            const REQUIRED_PIN = env.MAINTENANCE_PIN;
 
             if (secret !== SECRET_KEY) return new Response("Unauthorized Secret", { status: 401, headers: getCorsHeaders() });
             if (pin !== REQUIRED_PIN) return new Response("Invalid Maintenance PIN", { status: 403, headers: getCorsHeaders() });
@@ -108,65 +108,157 @@ export async function onRequest(context) {
         // --- 2. POI Discovery Proxy ---
         if (path === "/api/proxy/poi") {
             let promptStr = "";
-            let model = "gemini-search";
+            let model = "openai"; // Default to "openai" for new API
             let key = "";
             if (request.method === "POST") {
                 try {
                     const body = await request.json();
                     promptStr = body.prompt || "";
-                    model = body.model || "gemini-search";
+                    model = body.model || "openai"; // Client might still send "gemini-search", so default
                     key = body.key || "";
-                } catch(e) {}
+                } catch(e) { console.error("Error parsing POI proxy POST body:", e); }
             } else {
+                // If it's a GET (legacy or direct test), use a default prompt
                 const city = url.searchParams.get("city");
                 promptStr = `Name one famous landmark in ${city}. Output JSON: {"name": "Name", "description": "Short 1 sentence description"}`;
             }
 
             const payload = {
                 messages: [
-                    { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
+                    { role: "system", content: "Output ONLY a raw JSON array of objects. Do not wrap in markdown blocks. Each object must have exactly two keys: \"name\" and \"description\". \"description\" must be 1-2, concise sentences." },
                     { role: "user", content: promptStr }
                 ],
                 model: model,
-                jsonMode: true
             };
             
-            let pollUrl = "https://text.pollinations.ai/";
-            if (key) pollUrl += `?key=${key}`;
-
-            const res = await fetch(pollUrl, {
+            const pollResponse = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(key && { "Authorization": `Bearer ${key}` }) // Add auth header if key exists
+                },
                 body: JSON.stringify(payload)
             });
-            const t = await res.text();
-            const clean = t.split("```json").join("").split("```").join("").trim();
-            return new Response(clean, { headers: getCorsHeaders() });
+
+            if (!pollResponse.ok) {
+                const errorText = await pollResponse.text();
+                console.error("Pollinations API error for POI:", pollResponse.status, errorText);
+                return new Response(JSON.stringify({ error: `Pollinations API error: ${pollResponse.status}`, detail: errorText }), { status: pollResponse.status, headers: getCorsHeaders() });
+            }
+
+            const pollData = await pollResponse.json();
+            
+            // --- TRANSFORM POLLINATIONS RESPONSE TO CLIENT EXPECTED FORMAT ---
+            try {
+                const generatedContent = pollData.choices[0].message.content;
+                // Attempt to parse as JSON array, as client expects it
+                const parsedPois = JSON.parse(generatedContent);
+                if (Array.isArray(parsedPois)) {
+                    return new Response(JSON.stringify(parsedPois), { headers: getCorsHeaders() });
+                } else {
+                    // If not an array, wrap it in one or handle as single object if appropriate
+                    // For now, if it's a single object, put it in an array
+                    if (typeof parsedPois === 'object' && parsedPois !== null && parsedPois.name && parsedPois.description) {
+                         return new Response(JSON.stringify([parsedPois]), { headers: getCorsHeaders() });
+                    }
+                    console.error("AI POI response not an array or single POI object:", generatedContent);
+                    return new Response(JSON.stringify({ error: "AI response not in expected POI array format", detail: generatedContent }), { status: 500, headers: getCorsHeaders() });
+                }
+            } catch (e) {
+                console.error("Error parsing AI POI response content:", e, pollData);
+                return new Response(JSON.stringify({ error: "Failed to parse AI POI response content", detail: e.message, raw: pollData }), {
+                    status: 500,
+                    headers: getCorsHeaders()
+                });
+            }
         }
 
         // --- 3. POI Consult/Sanitize Proxy ---
         if (path === "/api/proxy/consult") {
             const name = url.searchParams.get("name");
             const city = url.searchParams.get("city");
-            const key = url.searchParams.get("key");
-            const promptStr = `Provide a concise 1-2 sentence visual description of the landmark '${name}' in ${city}. No other text.`;
-            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=gemini-search${key ? "&key="+key : ""}`;
-            const res = await fetch(apiUrl);
-            const t = await res.text();
-            return new Response(JSON.stringify({ description: t.trim() }), { headers: getCorsHeaders() });
+            const key = url.searchParams.get("key"); // Extract key from URL param
+            const consultPrompt = `Provide a concise 1-2 sentence visual description of the landmark '${name}' in ${city}. No other text.`;
+
+            const payload = {
+                messages: [
+                    { role: "user", content: consultPrompt }
+                ],
+                model: "openai", // Default model for consultation
+            };
+
+            const pollResponse = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(key && { "Authorization": `Bearer ${key}` }) // Add auth header if key exists
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!pollResponse.ok) {
+                const errorText = await pollResponse.text();
+                console.error("Pollinations API error for Consult:", pollResponse.status, errorText);
+                return new Response(JSON.stringify({ error: `Pollinations API error: ${pollResponse.status}`, detail: errorText }), { status: pollResponse.status, headers: getCorsHeaders() });
+            }
+
+            const pollData = await pollResponse.json();
+            
+            try {
+                const description = pollData.choices[0].message.content;
+                return new Response(JSON.stringify({ description: description }), { headers: getCorsHeaders() });
+            } catch (e) {
+                console.error("Error parsing AI consult response:", e, pollData);
+                return new Response(JSON.stringify({ error: "Failed to get AI consultation", detail: e.message, raw: pollData }), { 
+                    status: 500, 
+                    headers: getCorsHeaders() 
+                });
+            }
         }
 
         if (path === "/api/proxy/sanitize") {
             const name = url.searchParams.get("name") || "";
             const desc = url.searchParams.get("description") || "";
             const city = url.searchParams.get("city") || "";
-            const key = url.searchParams.get("key");
-            const promptStr = `Refine this landmark info for an AI image generator. Landmark: "${name}", Description: "${desc}", Location: "${city}". Fix spelling, remove conversational filler, and make it visually evocative. Output ONLY raw JSON: {"name": "Refined Name", "description": "Refined 1-sentence visual description"}`;
-            const apiUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(promptStr)}?model=gemini-search&system=Output%20JSON%20only${key ? "&key="+key : ""}`;
-            const res = await fetch(apiUrl);
-            const t = await res.text();
-            const clean = t.split("```json").join("").split("```").join("").trim();
-            return new Response(clean, { headers: getCorsHeaders() });
+            const key = url.searchParams.get("key"); // Extract key from URL param
+            const promptStr = `Refine this landmark info for an AI image generator. Landmark: "${name}", Description: "${desc}", Location: "${city}". Fix spelling, remove conversational filler, and make it visually evocative. Output ONLY raw JSON: {\"name\": \"Refined Name\", \"description\": \"Refined 1-sentence visual description\"}`;
+            
+            const payload = {
+                messages: [
+                    { role: "system", content: "Output ONLY raw JSON. Do not wrap in markdown blocks." },
+                    { role: "user", content: promptStr }
+                ],
+                model: "openai", // Default model for sanitization
+            };
+
+            const pollResponse = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(key && { "Authorization": `Bearer ${key}` }) // Add auth header if key exists
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!pollResponse.ok) {
+                const errorText = await pollResponse.text();
+                console.error("Pollinations API error for Sanitize:", pollResponse.status, errorText);
+                return new Response(JSON.stringify({ error: `Pollinations API error: ${pollResponse.status}`, detail: errorText }), { status: pollResponse.status, headers: getCorsHeaders() });
+            }
+
+            const pollData = await pollResponse.json();
+
+            try {
+                const generatedContent = pollData.choices[0].message.content;
+                const parsedSanitized = JSON.parse(generatedContent); // Assumes AI returns a JSON object string
+                return new Response(JSON.stringify(parsedSanitized), { headers: getCorsHeaders() });
+            } catch (e) {
+                console.error("Error parsing AI sanitize response:", e, pollData);
+                return new Response(JSON.stringify({ error: "Failed to sanitize POI with AI", detail: e.message, raw: pollData }), {
+                    status: 500,
+                    headers: getCorsHeaders()
+                });
+            }
         }
 
         // --- 4. Reverse Geocode Proxy ---
@@ -297,26 +389,38 @@ export async function onRequest(context) {
                 try {
                     const discPayload = {
                         messages: [
-                            { role: "system", content: "Output JSON only. Do not wrap in markdown blocks." },
+                            { role: "system", content: "Output ONLY a raw JSON array of objects. Do not wrap in markdown blocks. Each object must have exactly two keys: \"name\" and \"description\". \"description\" must be 1-2, concise sentences." },
                             { role: "user", content: discPrompt }
                         ],
-                        model: config.textModel || "gemini-search",
-                        jsonMode: true
+                        model: config.textModel || "openai", // Use client-defined model or default
                     };
-                    const discRes = await fetch("https://text.pollinations.ai/", {
+
+                    const discRes = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(config.apiKey && { "Authorization": `Bearer ${config.apiKey}` }) // Use API key from config
+                        },
                         body: JSON.stringify(discPayload)
                     });
-                    const discText = await discRes.text();
-                    const cleanDisc = discText.split("```json").join("").split("```").join("").trim();
-                    const discoveredData = JSON.parse(cleanDisc);
-                    pois = Array.isArray(discoveredData) ? discoveredData : [discoveredData];
-                    
-                    if (env.LUMINA_SETTINGS && pois.length > 0) {
-                        await env.LUMINA_SETTINGS.put(cityKey, JSON.stringify(pois));
+
+                    if (!discRes.ok) {
+                        const errorText = await discRes.text();
+                        console.error("Pollinations API error for /api/context POI discovery:", discRes.status, errorText);
+                        // Fallback to default POI if API fails
+                        pois = [{ name: city, description: "A beautiful local view." }];
+                    } else {
+                        const discData = await discRes.json();
+                        const generatedContent = discData.choices[0].message.content;
+                        const discoveredData = JSON.parse(generatedContent);
+                        pois = Array.isArray(discoveredData) ? discoveredData : [discoveredData];
+                        
+                        if (env.LUMINA_SETTINGS && pois.length > 0) {
+                            await env.LUMINA_SETTINGS.put(cityKey, JSON.stringify(pois));
+                        }
                     }
                 } catch(e) { 
+                    console.error("Error in /api/context POI discovery:", e);
                     pois = [{ name: city, description: "A beautiful local view." }];
                 }
             }
